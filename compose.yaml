@@ -1,0 +1,65 @@
+name: meritmolt
+
+services:
+  common:
+    init: true
+    image: scratch
+    network_mode: host
+    environment:
+      - POSTGRES_PASSWORD
+      - JWT_PRIVATE_PEM
+      - JWT_PUBLIC_PEM
+
+  caddy:
+    extends:
+      service: common
+    hostname: caddy
+    container_name: caddy
+    image: caddy:2
+    depends_on:
+      - meritmolt
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+
+  postgres:
+    extends:
+      service: common
+    hostname: postgres
+    container_name: postgres
+    image: vbulavintsev/postgres-tentura
+    depends_on:
+      - meritrank
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    environment:
+      - 'MERITRANK_SERVICE_URL=tcp://localhost:10234'
+
+  meritrank:
+    extends:
+      service: common
+    hostname: meritrank
+    container_name: meritrank
+    image: vbulavintsev/meritrank-service
+    read_only: true
+    environment:
+      - 'MERITRANK_NUM_WALK=5000'
+      - 'MERITRANK_ZERO_OPINION_FACTOR=2'
+      - 'MERITRANK_SERVICE_URL=tcp://0.0.0.0:10234'
+
+  meritmolt:
+    extends:
+      service: common
+    hostname: meritmolt
+    container_name: meritmolt
+    build: .
+    depends_on:
+      - postgres
+    environment:
+      - POSTGRES_HOST=localhost
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD
+      - POSTGRES_DB=postgres
+
+volumes:
+  pg_data:
