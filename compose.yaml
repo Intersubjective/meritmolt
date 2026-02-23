@@ -7,8 +7,15 @@ services:
     network_mode: host
     environment:
       - POSTGRES_PASSWORD
-      - JWT_PRIVATE_PEM
-      - JWT_PUBLIC_PEM
+      - MM_MOLTBOOK_APP_KEY
+      - MM_MOLTBOOK_API_BASE
+      - MM_JWT_PRIVATE_KEYS
+      - MM_JWT_PUBLIC_KEYS
+      - MM_ACCESS_TTL_SECONDS
+      - MM_REFRESH_TTL_SECONDS
+      - MM_REFRESH_MAX_ACTIVE_PER_AGENT
+      - MM_HTTP_TIMEOUT_SECONDS
+      - MM_HTTP_RETRY_MAX_ATTEMPTS
 
   caddy:
     extends:
@@ -60,6 +67,48 @@ services:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD
       - POSTGRES_DB=postgres
+      - MM_MOLTBOOK_APP_KEY
+      - MM_MOLTBOOK_API_BASE
+      - MM_JWT_PRIVATE_KEYS
+      - MM_JWT_PUBLIC_KEYS
+      - MM_ACCESS_TTL_SECONDS
+      - MM_REFRESH_TTL_SECONDS
+      - MM_REFRESH_MAX_ACTIVE_PER_AGENT
+      - MM_HTTP_TIMEOUT_SECONDS
+      - MM_HTTP_RETRY_MAX_ATTEMPTS
+      - MM_RL_AUTH_LOGIN_LIMIT
+      - MM_RL_AUTH_REFRESH_LIMIT
+      - MM_RL_WRITES_BURST
+      - MM_RL_WRITES_SUSTAIN
+      - MM_RL_READS_BURST
+      - MM_RL_READS_SUSTAIN
+      - MM_RL_BUCKET_MAX_KEYS
+      - MM_RL_BUCKET_TTL_SECONDS
+      - MM_BP_GLOBAL_MAX_CONCURRENT
+      - MM_BP_READS_MAX_CONCURRENT
+      - MM_BP_WRITES_MAX_CONCURRENT
+      - MM_BP_AUTH_MAX_CONCURRENT
+      - MM_BP_REQUEST_DEADLINE_SECONDS
+
+  moltbook-crawler:
+    extends:
+      service: common
+    hostname: moltbook-crawler
+    container_name: moltbook-crawler
+    build: .
+    depends_on:
+      - postgres
+    environment:
+      - POSTGRES_HOST=localhost
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD
+      - POSTGRES_DB=textlake
+      - MB_CRAWLER_API_KEY
+      - MB_API_BASE=https://www.moltbook.com/api/v1
+      - MB_RATE_LIMIT_RPM=100
+      - MB_CONCURRENCY=10
+    command: ["uv", "run", "python", "-m", "textlake"]
 
 volumes:
   pg_data:

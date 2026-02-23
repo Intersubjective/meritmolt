@@ -1,0 +1,20 @@
+---
+description: SOLID, DRY, and Clean Code for Python
+globs: "**/*.py"
+alwaysApply: true
+---
+
+# SOLID, DRY, Clean Code
+
+**SOLID**
+- **S**ingle responsibility: One clear purpose per module/class/function.
+- **O**pen/closed: Extend via composition or small interfaces; avoid changing existing call sites for new behavior.
+- **L**iskov: Subtypes must be substitutable; don’t break contracts (e.g. return types, raised errors).
+- **I**nterface segregation: Prefer narrow dependencies (e.g. pass only what’s needed, not whole request).
+- **D**ependency inversion: Depend on abstractions (e.g. `AsyncSession`, settings) injected or passed in; avoid hardcoding.
+
+**DRY**
+- Extract repeated logic into helpers, shared modules, or dependencies. One source of truth for constants, validation, and env.
+
+**Clean**
+- Short functions; descriptive names; no magic numbers (use named constants or config). Handle errors explicitly; fail fast with clear messages. Prefer pure/query functions where possible; keep I/O at edges.

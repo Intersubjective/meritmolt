@@ -1,0 +1,12 @@
+---
+description: Ruff and Black lint/format rules for Python
+globs: "**/*.py"
+alwaysApply: false
+---
+
+# Python Linters (Ruff, Black)
+
+- **Ruff**: Line length 88, target Python 3.14. Enable rules E, F, I, N, W. Run `uv run ruff check .` and `uv run ruff format .` before committing.
+- **Black**: Line length 88, target py314. Keep formatting consistent with Black; Ruff format can be used as the formatter.
+- Break lines over 88 characters; use parentheses for multi-line expressions. Fix import order (I001); Ruff --fix can auto-sort.
+- No unused imports (F401) or variables. Prefer explicit exception handling; avoid bare `except:`.

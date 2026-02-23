@@ -1,11 +1,38 @@
-"""Minimal FastAPI app with health and a psycopg2-backed route."""
+"""MeritMolt FastAPI app: health and auth."""
 
-import os
+from contextlib import asynccontextmanager
 
-import psycopg2
 from fastapi import FastAPI
 
-app = FastAPI()
+from meritmolt.auth.router import router as auth_router
+from meritmolt.backpressure import BackpressureMiddleware
+from meritmolt.config import get_settings
+from meritmolt.database import engine, init_db
+from meritmolt.events.router import router as events_router
+from meritmolt.rank.router import router as rank_router
+from meritmolt.ratelimit import RateLimitMiddleware
+from meritmolt.scores.router import router as scores_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
+    """Create DB engine and tables on startup; dispose on shutdown."""
+    settings = get_settings()
+    await init_db(settings)
+    yield
+    if engine is not None:
+        await engine.dispose()
+
+
+app = FastAPI(lifespan=lifespan)
+app.include_router(auth_router)
+app.include_router(events_router)
+app.include_router(scores_router)
+app.include_router(rank_router)
+
+settings = get_settings()
+app.add_middleware(RateLimitMiddleware, settings=settings)
+app.add_middleware(BackpressureMiddleware, settings=settings)
 
 
 @app.get("/")
@@ -19,20 +46,15 @@ def health() -> dict[str, str]:
 
 
 @app.get("/db")
-def db_ping() -> dict[str, str | bool]:
-    """Ping Postgres using psycopg2 (connection from env)."""
+async def db_ping() -> dict[str, str | bool]:
+    """Ping Postgres via async engine."""
+    if engine is None:
+        return {"status": "error", "db": False, "message": "Database not initialized"}
     try:
-        conn = psycopg2.connect(
-            host=os.environ.get("POSTGRES_HOST", "localhost"),
-            port=int(os.environ.get("POSTGRES_PORT", "5432")),
-            user=os.environ.get("POSTGRES_USER", "postgres"),
-            password=os.environ.get("POSTGRES_PASSWORD", ""),
-            dbname=os.environ.get("POSTGRES_DB", "postgres"),
-        )
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1")
-            cur.fetchone()
-        conn.close()
+        from sqlalchemy import text
+
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
         return {"status": "ok", "db": True}
     except Exception as e:
         return {"status": "error", "db": False, "message": str(e)}
