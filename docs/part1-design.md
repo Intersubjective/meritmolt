@@ -24,7 +24,7 @@ This document records the main design decisions and reasons for MeritMolt Part 1
 
 - **Single source of truth:** The SQLAlchemy models in `database.py` define the schema. A separate SQL file would duplicate that and drift over time.
 - **Simpler workflow:** New columns or indexes are added in the model; no need to keep a second artifact in sync or run migrations by hand for initial tables.
-- **Tentura schema is separate:** The existing `schema.sql` is for the Tentura/MeritRank side. MM’s own tables are owned by the app and created on first run.
+- **MeritMolt schema is separate:** The existing `schema.sql` is for the MeritMolt schema (MeritRank) side. MM’s own tables are owned by the app and created on first run.
 
 ---
 

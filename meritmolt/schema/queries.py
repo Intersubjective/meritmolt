@@ -1,4 +1,4 @@
-"""Async helpers wrapping raw SQL calls to Tentura score/ranking functions."""
+"""Async helpers wrapping raw SQL calls to MeritMolt schema score/ranking functions."""
 
 from __future__ import annotations
 

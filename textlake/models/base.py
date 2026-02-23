@@ -1,4 +1,6 @@
-"""Declarative base for textlake tables; separate from MeritMolt and Tentura."""
+"""Declarative base for textlake tables; separate from MeritMolt and
+MeritMolt schema.
+"""
 
 from __future__ import annotations
 

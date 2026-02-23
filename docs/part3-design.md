@@ -6,11 +6,11 @@ This document records the main design decisions and reasons for the Moltbook Tex
 
 ## 1. Separate package and database (textlake/ + DB `textlake`)
 
-**Decision:** Add a top-level Python package `textlake/` beside `meritmolt/` in the same repo. The crawler connects to the same Postgres instance as MeritMolt but uses a separate database named `textlake`, with its own Alembic migrations and ORM base (`TextLakeBase`). No shared tables or schema coupling with the MeritMolt/Tentura schema.
+**Decision:** Add a top-level Python package `textlake/` beside `meritmolt/` in the same repo. The crawler connects to the same Postgres instance as MeritMolt but uses a separate database named `textlake`, with its own Alembic migrations and ORM base (`TextLakeBase`). No shared tables or schema coupling with the MeritMolt schema.
 
 **Reasons:**
 
-- **Isolation:** Consumers of the text lake (MeritMolt or others) read stable, normalized tables and time-series snapshots without depending on MR schema or Tentura triggers.
+- **Isolation:** Consumers of the text lake (MeritMolt or others) read stable, normalized tables and time-series snapshots without depending on MR schema or MeritMolt schema triggers.
 - **Independent lifecycle:** The crawler can be deployed, migrated, or scaled independently; schema changes to the text lake do not affect MeritMolt’s DB.
 - **Shared Postgres ops:** One instance, one backup story; only the database name and migrations differ.
 
@@ -51,7 +51,7 @@ This document records the main design decisions and reasons for the Moltbook Tex
 
 ## 5. ORM: TextLakeBase, entities, time-series, crawl tables
 
-**Decision:** All crawler tables are defined on a single `TextLakeBase` (separate from MeritMolt’s `Base` and Tentura’s `TenturaBase`). Core entities: `mb_agent`, `mb_submolt`, `mb_post`, `mb_comment` with CITEXT for natural keys and JSONB `raw_json`. Append-only time-series tables: `mb_agent_stats_ts`, `mb_submolt_stats_ts`, `mb_post_stats_ts`, `mb_comment_stats_ts` with composite PK `(ts, entity_id)`. Orchestration: `crawl_task` (work queue), `crawl_state` (cursors and adaptive state), `raw_capture` (optional TTL-pruned request/response log).
+**Decision:** All crawler tables are defined on a single `TextLakeBase` (separate from MeritMolt’s `Base` and MeritMolt schema’s `SchemaBase`). Core entities: `mb_agent`, `mb_submolt`, `mb_post`, `mb_comment` with CITEXT for natural keys and JSONB `raw_json`. Append-only time-series tables: `mb_agent_stats_ts`, `mb_submolt_stats_ts`, `mb_post_stats_ts`, `mb_comment_stats_ts` with composite PK `(ts, entity_id)`. Orchestration: `crawl_task` (work queue), `crawl_state` (cursors and adaptive state), `raw_capture` (optional TTL-pruned request/response log).
 
 **Reasons:**
 
@@ -150,7 +150,7 @@ This document records the main design decisions and reasons for the Moltbook Tex
 
 ## 14. No Caddy route for crawler; no coupling to MR schema
 
-**Decision:** The crawler does not expose HTTP endpoints and is not behind Caddy. It is a headless worker. It does not read or write MeritMolt or Tentura tables; it only uses the `textlake` database.
+**Decision:** The crawler does not expose HTTP endpoints and is not behind Caddy. It is a headless worker. It does not read or write MeritMolt schema tables; it only uses the `textlake` database.
 
 **Reasons:**
 

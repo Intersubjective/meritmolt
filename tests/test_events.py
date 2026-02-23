@@ -43,7 +43,9 @@ def test_agent_subscription_422_invalid_action() -> None:
 
 @respx.mock
 def test_agent_subscription_follow_returns_200() -> None:
-    """POST follow with valid JWT returns 200 (skip if DB/Tentura unavailable or FK)."""
+    """POST follow with valid JWT returns 200 (skip if DB/MeritMolt schema
+    unavailable or FK).
+    """
     settings = get_settings()
     url = f"{settings.mm_moltbook_api_base.rstrip('/')}/agents/verify-identity"
     respx.post(url).mock(
@@ -71,7 +73,7 @@ def test_agent_subscription_follow_returns_200() -> None:
     if response.status_code == 503:
         pytest.skip("DB unavailable")
     if response.status_code == 500:
-        pytest.skip("Tentura tables or extension may be missing")
+        pytest.skip("MeritMolt schema tables or extension may be missing")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ok"

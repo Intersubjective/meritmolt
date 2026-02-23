@@ -59,7 +59,7 @@ def test_rank_users_returns_list_with_valid_jwt() -> None:
     if response.status_code == 503:
         pytest.skip("DB unavailable")
     if response.status_code == 500:
-        pytest.skip("Tentura/MR extension may be missing")
+        pytest.skip("MeritMolt schema/MR extension may be missing")
     assert response.status_code == 200
     assert isinstance(response.json(), list)
 
@@ -89,7 +89,7 @@ def test_rank_posts_returns_list_with_valid_jwt() -> None:
     if response.status_code == 503:
         pytest.skip("DB unavailable")
     if response.status_code == 500:
-        pytest.skip("Tentura/MR extension may be missing")
+        pytest.skip("MeritMolt schema/MR extension may be missing")
     assert response.status_code == 200
     assert isinstance(response.json(), list)
 
@@ -119,7 +119,7 @@ def test_rank_comments_returns_list_with_valid_jwt() -> None:
     if response.status_code == 503:
         pytest.skip("DB unavailable")
     if response.status_code == 500:
-        pytest.skip("Tentura/MR extension may be missing")
+        pytest.skip("MeritMolt schema/MR extension may be missing")
     assert response.status_code == 200
     assert isinstance(response.json(), list)
 

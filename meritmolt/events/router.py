@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from meritmolt.auth.dependencies import get_current_agent, get_db_session
 from meritmolt.database import MmAgent
 from meritmolt.events.schemas import AgentSubscriptionRequest
-from meritmolt.tentura.models import VoteUser
+from meritmolt.schema.models import VoteUser
 
 logger = logging.getLogger(__name__)
 

@@ -7,9 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from meritmolt.auth.dependencies import get_current_agent, get_db_session
 from meritmolt.database import MmAgent
+from meritmolt.schema import queries
+from meritmolt.schema.queries import MutualScoreRow
 from meritmolt.schemas import MutualScore
-from meritmolt.tentura import queries
-from meritmolt.tentura.queries import MutualScoreRow
 
 router = APIRouter(prefix="/v1/scores", tags=["scores"])
 

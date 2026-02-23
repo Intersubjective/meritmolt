@@ -1,35 +1,35 @@
 # Part 2 Design: MR Read APIs + Agent Subscriptions (ORM Hybrid)
 
-This document records the main design decisions and reasons for MeritMolt Part 2: agent follow/unfollow events, MeritRank score endpoints, and ranked-list endpoints, with the Tentura schema owned as ORM plus DDL applied at startup.
+This document records the main design decisions and reasons for MeritMolt Part 2: agent follow/unfollow events, MeritRank score endpoints, and ranked-list endpoints, with the MeritMolt schema owned as ORM plus DDL applied at startup.
 
 ---
 
-## 1. Tentura schema in ORM; triggers/functions as DDL at startup (Option B)
+## 1. MeritMolt schema in ORM; triggers/functions as DDL at startup (Option B)
 
-**Decision:** Define all Tentura tables (`user`, `post`, `comment`, `vote_user`, `vote_post`, `vote_comment`, `user_vsids`, `user_board`, `schema_version`) as SQLAlchemy ORM models on a separate `TenturaBase`. Triggers, views, and wrapper functions are not in the ORM; they are applied as idempotent SQL in `init_db()` after `TenturaBase.metadata.create_all`, using constants in `meritmolt/tentura/ddl.py`.
+**Decision:** Define all MeritMolt schema tables (`user`, `post`, `comment`, `vote_user`, `vote_post`, `vote_comment`, `user_vsids`, `user_board`, `schema_version`) as SQLAlchemy ORM models on a separate `SchemaBase`. Triggers, views, and wrapper functions are not in the ORM; they are applied as idempotent SQL in `init_db()` after `SchemaBase.metadata.create_all`, using constants in `meritmolt/schema/ddl.py`.
 
 **Reasons:**
 
-- **Single source of truth for tables:** Schema shape lives in `tentura/models.py`; no hand-maintained `schema.sql` for table definitions. Aligns with Part 1’s “ORM creates tables” approach.
-- **Battle-tested trigger logic:** Trigger functions are copied verbatim from the existing Tentura dump; only attachment uses `DROP TRIGGER IF EXISTS` + `CREATE TRIGGER` for idempotency. MR plugin functions (`mr_put_edge`, `mr_delete_edge`, etc.) remain untouched and are provided by the Postgres image (e.g. postgres-tentura with pgmer2).
+- **Single source of truth for tables:** Schema shape lives in `schema/models.py`; no hand-maintained `schema.sql` for table definitions. Aligns with Part 1’s “ORM creates tables” approach.
+- **Battle-tested trigger logic:** Trigger functions are copied verbatim from the existing dump; only attachment uses `DROP TRIGGER IF EXISTS` + `CREATE TRIGGER` for idempotency. MR plugin functions (`mr_put_edge`, `mr_delete_edge`, etc.) remain untouched and are provided by the Postgres image (e.g. postgres image with pgmer2).
 - **Option B over event listeners:** Applying DDL in a single, explicit sequence in `init_db()` is easier to reason about and to re-run (e.g. after image restart) than scattering trigger DDL across SQLAlchemy `event.listen` hooks.
 
 ---
 
-## 2. Separate TenturaBase; MM tables after Tentura DDL
+## 2. Separate SchemaBase; MM tables after MeritMolt schema DDL
 
-**Decision:** Use two declarative bases: `TenturaBase` for Tentura tables, `Base` for MM tables (`mm_agents`, `mm_refresh_tokens`). Startup order: create extension → create Tentura tables → create views → create trigger functions → create triggers → create wrapper functions → create MM tables.
+**Decision:** Use two declarative bases: `SchemaBase` for MeritMolt schema tables, `Base` for MM tables (`mm_agents`, `mm_refresh_tokens`). Startup order: create extension → create MeritMolt schema tables → create views → create trigger functions → create triggers → create wrapper functions → create MM tables.
 
 **Reasons:**
 
-- **Clear ownership:** Tentura models are isolated in `meritmolt/tentura/models.py`; MM models stay in `database.py`. Triggers and functions depend on Tentura table names and columns; creating MM tables last avoids any cross-dependency.
+- **Clear ownership:** MeritMolt schema models are isolated in `meritmolt/schema/models.py`; MM models stay in `database.py`. Triggers and functions depend on MeritMolt schema table names and columns; creating MM tables last avoids any cross-dependency.
 - **Extension first:** `CREATE EXTENSION IF NOT EXISTS pgmer2` runs before any table or function that references `mr_*` so the extension is present when triggers and wrappers are created.
 
 ---
 
 ## 3. Actor from JWT only; mapped to `public."user".id`
 
-**Decision:** All Part 2 endpoints require `Authorization: Bearer <MM access JWT>`. The actor is resolved via `get_current_agent`; `actor_user_id` is `agent.mb_agent_id`, which corresponds to `public."user".id` in the Tentura schema. No actor fields are accepted in request bodies or query parameters.
+**Decision:** All Part 2 endpoints require `Authorization: Bearer <MM access JWT>`. The actor is resolved via `get_current_agent`; `actor_user_id` is `agent.mb_agent_id`, which corresponds to `public."user".id` in the MeritMolt schema. No actor fields are accepted in request bodies or query parameters.
 
 **Reasons:**
 
@@ -51,7 +51,7 @@ This document records the main design decisions and reasons for MeritMolt Part 2
 
 ## 5. Score and ranking: raw SQL in query helpers
 
-**Decision:** Calls to Tentura wrapper functions (`user_get_scores`, `post_get_scores`, `comment_get_scores`, `rating`, `my_field`) and the lateral-join query for ranked comments are implemented in `meritmolt/tentura/queries.py` using raw SQL (`text(...)`) and bound parameters. Routers call these helpers and map results to Pydantic `MutualScore` / `CommentRank`. No MR logic is implemented in the application layer.
+**Decision:** Calls to MeritMolt schema wrapper functions (`user_get_scores`, `post_get_scores`, `comment_get_scores`, `rating`, `my_field`) and the lateral-join query for ranked comments are implemented in `meritmolt/schema/queries.py` using raw SQL (`text(...)`) and bound parameters. Routers call these helpers and map results to Pydantic `MutualScore` / `CommentRank`. No MR logic is implemented in the application layer.
 
 **Reasons:**
 
@@ -66,7 +66,7 @@ This document records the main design decisions and reasons for MeritMolt Part 2
 
 **Reasons:**
 
-- **Single place for Tentura DDL:** Everything that is not an ORM table lives in `ddl.py`; no separate SQL files to keep in sync.
+- **Single place for MeritMolt schema DDL:** Everything that is not an ORM table lives in `ddl.py`; no separate SQL files to keep in sync.
 - **Safe restarts:** Re-running `init_db()` (e.g. after container restart) does not fail and leaves the schema in the intended state.
 
 ---
@@ -95,7 +95,7 @@ This document records the main design decisions and reasons for MeritMolt Part 2
 
 ## 9. Tests: skip when DB or MR unavailable
 
-**Decision:** Integration tests for events, scores, and rank follow the Part 1 pattern: they call the real app and skip with a clear reason when the response is 503 (DB not initialized) or 500 (e.g. Tentura/MR extension or functions missing). Tests cover 401 without Bearer, validation errors (e.g. invalid action or limit), and success paths when the backend is available.
+**Decision:** Integration tests for events, scores, and rank follow the Part 1 pattern: they call the real app and skip with a clear reason when the response is 503 (DB not initialized) or 500 (e.g. MeritMolt schema/MR extension or functions missing). Tests cover 401 without Bearer, validation errors (e.g. invalid action or limit), and success paths when the backend is available.
 
 **Reasons:**
 
@@ -106,12 +106,12 @@ This document records the main design decisions and reasons for MeritMolt Part 2
 
 ## 10. No MR logic in application layer
 
-**Decision:** The application does not implement MeritRank algorithms. It inserts/deletes rows in Tentura tables (via ORM for `vote_user`) and calls Postgres wrapper functions (via raw SQL). All `mr_*` invocations happen inside triggers or inside those wrapper functions in the database.
+**Decision:** The application does not implement MeritRank algorithms. It inserts/deletes rows in MeritMolt schema tables (via ORM for `vote_user`) and calls Postgres wrapper functions (via raw SQL). All `mr_*` invocations happen inside triggers or inside those wrapper functions in the database.
 
 **Reasons:**
 
 - **Spec alignment:** Part 2 spec states that ranking and scoring rely entirely on existing MR functions and triggers.
-- **Maintainability:** MR behavior is owned by the extension and Tentura DDL; MM stays a thin API and schema owner.
+- **Maintainability:** MR behavior is owned by the extension and MeritMolt schema DDL; MM stays a thin API and schema owner.
 
 ---
 
@@ -119,7 +119,7 @@ This document records the main design decisions and reasons for MeritMolt Part 2
 
 | Area              | Decision                              | Main reason                              |
 |-------------------|----------------------------------------|------------------------------------------|
-| Tentura tables    | ORM (`TenturaBase`)                    | Single source of truth; no DDL drift     |
+| MeritMolt schema tables    | ORM (`SchemaBase`)                    | Single source of truth; no DDL drift     |
 | Triggers/views/fns| DDL at startup (Option B)              | Idempotent; battle-tested logic preserved|
 | Actor             | From JWT only (`mb_agent_id`)          | No impersonation; maps to `user`.id      |
 | Agent subscription| ORM insert/delete on `vote_user`       | Triggers handle MR; idempotent ops       |

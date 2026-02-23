@@ -1,4 +1,4 @@
-"""SQL DDL constants for Tentura: extension, views, trigger functions, triggers,
+"""SQL DDL constants for MeritMolt schema: extension, views, trigger functions, triggers,
 wrapper functions.
 
 All use CREATE OR REPLACE / CREATE ... IF NOT EXISTS / DROP IF EXISTS

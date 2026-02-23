@@ -16,14 +16,14 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from meritmolt.config import Settings
-from meritmolt.tentura.ddl import (
+from meritmolt.schema.ddl import (
     EXTENSION_SQL,
     TRIGGER_FUNCTIONS_SQL,
     TRIGGERS_SQL,
     VIEWS_SQL,
     WRAPPER_FUNCTIONS_SQL,
 )
-from meritmolt.tentura.models import TenturaBase
+from meritmolt.schema.models import SchemaBase
 
 # Set by init_db(); used by get_db_session
 engine: AsyncEngine | None = None
@@ -31,7 +31,7 @@ async_session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
 async def init_db(settings: Settings) -> None:
-    """Create async engine, session factory, Tentura schema + triggers/functions,
+    """Create async engine, session factory, MeritMolt schema + triggers/functions,
     and MM tables.
     """
     global engine, async_session_factory
@@ -47,7 +47,7 @@ async def init_db(settings: Settings) -> None:
     )
     async with engine.begin() as conn:
         await conn.execute(text(EXTENSION_SQL))
-        await conn.run_sync(TenturaBase.metadata.create_all)
+        await conn.run_sync(SchemaBase.metadata.create_all)
         await conn.execute(text(VIEWS_SQL))
         await conn.execute(text(TRIGGER_FUNCTIONS_SQL))
         await conn.execute(text(TRIGGERS_SQL))

@@ -1,9 +1,8 @@
-"""Tentura schema: ORM models and DDL for MeritRank-backed tables."""
+"""MeritMolt schema: ORM models and DDL for MeritRank-backed tables."""
 
-from meritmolt.tentura.models import (
+from meritmolt.schema.models import (
     Comment,
     Post,
-    SchemaVersion,
     User,
     UserBoard,
     UserVsids,
@@ -15,7 +14,6 @@ from meritmolt.tentura.models import (
 __all__ = [
     "Comment",
     "Post",
-    "SchemaVersion",
     "User",
     "UserBoard",
     "UserVsids",

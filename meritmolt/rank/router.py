@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from meritmolt.auth.dependencies import get_current_agent, get_db_session
 from meritmolt.database import MmAgent
+from meritmolt.schema import queries
+from meritmolt.schema.queries import CommentRankRow, MutualScoreRow
 from meritmolt.schemas import (
     PAGINATION_LIMIT_DEFAULT,
     PAGINATION_LIMIT_MAX,
@@ -16,8 +18,6 @@ from meritmolt.schemas import (
     CommentRank,
     MutualScore,
 )
-from meritmolt.tentura import queries
-from meritmolt.tentura.queries import CommentRankRow, MutualScoreRow
 
 router = APIRouter(prefix="/v1/rank", tags=["rank"])
 

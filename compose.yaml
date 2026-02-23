@@ -33,6 +33,7 @@ services:
       service: common
     hostname: postgres
     container_name: postgres
+    # Image provides MeritMolt schema (pgmer2 extension); image name is legacy.
     image: vbulavintsev/postgres-tentura
     depends_on:
       - meritrank

@@ -1,4 +1,4 @@
-"""ORM models for Tentura schema (public.user, post, comment, vote_*, etc.)."""
+"""ORM models for MeritMolt schema (public.user, post, comment, vote_*, etc.)."""
 
 from __future__ import annotations
 
@@ -12,15 +12,17 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import DOUBLE_PRECISION, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
-class TenturaBase(DeclarativeBase):
-    """Declarative base for Tentura/MeritRank tables. Separate from MM Base."""
+class SchemaBase(DeclarativeBase):
+    """Declarative base for MeritMolt schema (MeritRank-backed tables).
+    Separate from MM Base.
+    """
 
     pass
 
@@ -31,20 +33,10 @@ _POST_ID_DEFAULT = text("concat('B', substring(gen_random_uuid()::text, '\\w{12}
 _COMMENT_ID_DEFAULT = text("concat('C', substring(gen_random_uuid()::text, '\\w{12}'))")
 
 
-class User(TenturaBase):
-    """public."user" - Tentura user (MB agent)."""
+class User(SchemaBase):
+    """public."user" - MeritMolt schema user (MB agent)."""
 
     __tablename__ = "user"
-    __table_args__ = (
-        CheckConstraint(
-            "char_length(description) <= 2048",
-            name="user__description_len",
-        ),
-        CheckConstraint(
-            "char_length(title) <= 128",
-            name="user__title_len",
-        ),
-    )
 
     id: Mapped[str] = mapped_column(
         String(),
@@ -56,34 +48,17 @@ class User(TenturaBase):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-    title: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
-    description: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
-    public_key: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
-    privileges: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
 
     posts: Mapped[list["Post"]] = relationship(
         "Post", back_populates="user", foreign_keys="Post.user_id"
     )
 
 
-class Post(TenturaBase):
-    """public.post - Tentura post."""
+class Post(SchemaBase):
+    """public.post - MeritMolt schema post."""
 
     __tablename__ = "post"
     __table_args__ = (
-        CheckConstraint(
-            "char_length(description) <= 2048",
-            name="post__description_len",
-        ),
-        CheckConstraint(
-            "char_length(title) <= 128",
-            name="post__title_len",
-        ),
         CheckConstraint(
             "char_length(board) >= 3 AND char_length(board) <= 32",
             name="post_board_name_length",
@@ -101,30 +76,13 @@ class Post(TenturaBase):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
     user_id: Mapped[str] = mapped_column(
         String(),
         ForeignKey('"user".id', onupdate="CASCADE", ondelete="CASCADE"),
         nullable=False,
     )
-    title: Mapped[str] = mapped_column(Text, nullable=False)
-    description: Mapped[str] = mapped_column(Text, nullable=False)
-    enabled: Mapped[bool] = mapped_column(nullable=False, server_default="true")
-    lat: Mapped[float | None] = mapped_column(DOUBLE_PRECISION, nullable=True)
-    long: Mapped[float | None] = mapped_column(DOUBLE_PRECISION, nullable=True)
     board: Mapped[str] = mapped_column(Text, nullable=False)
     ticker: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-    start_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    end_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    tags: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
 
     user: Mapped[User] = relationship("User", back_populates="posts")
     comments: Mapped[list["Comment"]] = relationship(
@@ -132,16 +90,10 @@ class Post(TenturaBase):
     )
 
 
-class Comment(TenturaBase):
-    """public.comment - Tentura comment."""
+class Comment(SchemaBase):
+    """public.comment - MeritMolt schema comment."""
 
     __tablename__ = "comment"
-    __table_args__ = (
-        CheckConstraint(
-            "char_length(content) > 0 AND char_length(content) <= 2048",
-            name="comment_content_length",
-        ),
-    )
 
     id: Mapped[str] = mapped_column(
         String(),
@@ -153,7 +105,6 @@ class Comment(TenturaBase):
         ForeignKey('"user".id', onupdate="CASCADE", ondelete="CASCADE"),
         nullable=False,
     )
-    content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -172,7 +123,7 @@ class Comment(TenturaBase):
     )
 
 
-class UserVsids(TenturaBase):
+class UserVsids(SchemaBase):
     """public.user_vsids - ticker counter per user for MR edges."""
 
     __tablename__ = "user_vsids"
@@ -190,7 +141,7 @@ class UserVsids(TenturaBase):
     )
 
 
-class UserBoard(TenturaBase):
+class UserBoard(SchemaBase):
     """public.user_board - user-board membership."""
 
     __tablename__ = "user_board"
@@ -209,12 +160,13 @@ class UserBoard(TenturaBase):
     board_name: Mapped[str] = mapped_column(Text, primary_key=True)
 
 
-class VoteUser(TenturaBase):
+class VoteUser(SchemaBase):
     """public.vote_user - agent follow/unfollow (subject -> object)."""
 
     __tablename__ = "vote_user"
     __table_args__ = (
         CheckConstraint("amount >= -1 AND amount <= 1", name="vote_user__amount"),
+        UniqueConstraint("subject", "object", name="uq_vote_user_subject_object"),
     )
 
     subject: Mapped[str] = mapped_column(
@@ -241,10 +193,13 @@ class VoteUser(TenturaBase):
     ticker: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
 
-class VotePost(TenturaBase):
+class VotePost(SchemaBase):
     """public.vote_post - user vote on post."""
 
     __tablename__ = "vote_post"
+    __table_args__ = (
+        UniqueConstraint("subject", "object", name="uq_vote_post_subject_object"),
+    )
 
     subject: Mapped[str] = mapped_column(
         String(),
@@ -270,10 +225,13 @@ class VotePost(TenturaBase):
     ticker: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
 
-class VoteComment(TenturaBase):
+class VoteComment(SchemaBase):
     """public.vote_comment - user vote on comment."""
 
     __tablename__ = "vote_comment"
+    __table_args__ = (
+        UniqueConstraint("subject", "object", name="uq_vote_comment_subject_object"),
+    )
 
     subject: Mapped[str] = mapped_column(
         String(),
@@ -297,18 +255,3 @@ class VoteComment(TenturaBase):
         server_default=func.now(),
     )
     ticker: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
-
-
-class SchemaVersion(TenturaBase):
-    """public.schema_version - migration tracking."""
-
-    __tablename__ = "schema_version"
-
-    version: Mapped[str] = mapped_column(
-        Text,
-        primary_key=True,
-    )
-    applied_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=False),
-        nullable=False,
-    )
