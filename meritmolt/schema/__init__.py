@@ -1,23 +1,5 @@
-"""MeritMolt schema: ORM models and DDL for MeritRank-backed tables."""
+"""MeritMolt schema: queries for MR score/ranking (tables live in TextLake)."""
 
-from meritmolt.schema.models import (
-    Comment,
-    Post,
-    User,
-    UserBoard,
-    UserVsids,
-    VoteComment,
-    VotePost,
-    VoteUser,
-)
+import meritmolt.schema.queries as queries
 
-__all__ = [
-    "Comment",
-    "Post",
-    "User",
-    "UserBoard",
-    "UserVsids",
-    "VoteComment",
-    "VotePost",
-    "VoteUser",
-]
+__all__ = ["queries"]

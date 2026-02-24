@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import (
@@ -58,15 +57,14 @@ def init_engine(
     return engine, session_factory
 
 
-async def run_migrations(settings: CrawlerSettings) -> None:
-    """Run Alembic migrations to head. Config path is relative to this package."""
-    from alembic import command
-    from alembic.config import Config
+async def create_schema(engine: AsyncEngine) -> None:
+    """Create all TextLake tables (idempotent). After ensure_database + init_engine."""
+    import textlake.models as _models  # noqa: F401
+    from textlake.models.base import TextLakeBase
 
-    package_dir = Path(__file__).resolve().parent
-    alembic_ini = package_dir / "alembic.ini"
-    if not alembic_ini.exists():
-        raise FileNotFoundError(f"Missing {alembic_ini}")
-    cfg = Config(str(alembic_ini))
-    cfg.set_main_option("sqlalchemy.url", settings.database_url)
-    command.upgrade(cfg, "head")
+    # Ensure all models are loaded so metadata includes every table
+
+    _models.__all__  # avoid unused import warning
+
+    async with engine.begin() as conn:
+        await conn.run_sync(TextLakeBase.metadata.create_all)

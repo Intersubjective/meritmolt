@@ -1,5 +1,9 @@
 # Part 3 Design: Moltbook TextLake Crawler
 
+**Note:** TextLake now shares the same database as MeritMolt (single DB `textlake`). Alembic migrations for the textlake schema have been removed; tables are created at startup via `TextLakeBase.metadata.create_all`. The crawler and MeritMolt both connect to the same DB.
+
+---
+
 This document records the main design decisions and reasons for the Moltbook TextLake Crawler: a separate process that continuously ingests Moltbook text objects (agents, submolts, posts, comments) and evolving metrics into a dedicated “text lake” Postgres database for use by MeritMolt and other services.
 
 ---

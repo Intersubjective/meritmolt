@@ -1,4 +1,9 @@
-"""SQLAlchemy async engine, session factory, and ORM models for MeritMolt."""
+"""SQLAlchemy async engine, session factory, and ORM models for MeritMolt.
+
+init_db() imports TextLakeBase from textlake.models to create all TextLake tables
+(mb_*, user_vsids, subscribe, etc.) in the same DB. Both packages live in the same
+wheel; this cross-package dependency is intentional.
+"""
 
 from __future__ import annotations
 
@@ -23,7 +28,6 @@ from meritmolt.schema.ddl import (
     VIEWS_SQL,
     WRAPPER_FUNCTIONS_SQL,
 )
-from meritmolt.schema.models import SchemaBase
 
 # Set by init_db(); used by get_db_session
 engine: AsyncEngine | None = None
@@ -31,9 +35,7 @@ async_session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
 async def init_db(settings: Settings) -> None:
-    """Create async engine, session factory, MeritMolt schema + triggers/functions,
-    and MM tables.
-    """
+    """Create engine, session factory, TextLake tables, MR triggers, and MM tables."""
     global engine, async_session_factory
     engine = create_async_engine(
         settings.database_url,
@@ -46,8 +48,12 @@ async def init_db(settings: Settings) -> None:
         autoflush=False,
     )
     async with engine.begin() as conn:
+        # TextLake tables (mb_*, user_vsids, subscribe) - must exist before triggers
+        import textlake.models as _  # noqa: F401 - load all models so metadata is complete
+        from textlake.models.base import TextLakeBase
+
+        await conn.run_sync(TextLakeBase.metadata.create_all)
         await conn.execute(text(EXTENSION_SQL))
-        await conn.run_sync(SchemaBase.metadata.create_all)
         await conn.execute(text(VIEWS_SQL))
         await conn.execute(text(TRIGGER_FUNCTIONS_SQL))
         await conn.execute(text(TRIGGERS_SQL))

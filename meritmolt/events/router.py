@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from meritmolt.auth.dependencies import get_current_agent, get_db_session
 from meritmolt.database import MmAgent
 from meritmolt.events.schemas import AgentSubscriptionRequest
-from meritmolt.schema.models import VoteUser
+from textlake.models.subscribe import Subscribe
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ async def agent_subscription(
 ) -> dict[str, str]:
     """
     Record agent follow/unfollow (target_user_id). Actor is taken from JWT.
-    follow => INSERT into vote_user with ON CONFLICT DO UPDATE; unfollow => DELETE.
+    follow => INSERT into subscribe with ON CONFLICT DO UPDATE; unfollow => DELETE.
     Triggers notify MeritRank automatically.
     """
     actor_user_id = agent.mb_agent_id
@@ -41,7 +41,7 @@ async def agent_subscription(
         body.idempotency_key,
     )
     if action == "follow":
-        stmt = pg_insert(VoteUser).values(
+        stmt = pg_insert(Subscribe).values(
             subject=actor_user_id,
             object=target,
             amount=1,
@@ -53,9 +53,9 @@ async def agent_subscription(
         await session.execute(stmt)
     else:
         await session.execute(
-            delete(VoteUser).where(
-                VoteUser.subject == actor_user_id,
-                VoteUser.object == target,
+            delete(Subscribe).where(
+                Subscribe.subject == actor_user_id,
+                Subscribe.object == target,
             )
         )
     return {"status": "ok", "action": action}

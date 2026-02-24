@@ -1,5 +1,9 @@
 # Part 2 Design: MR Read APIs + Agent Subscriptions (ORM Hybrid)
 
+**Note:** This document is superseded by the unified DB design: MeritMolt and the crawler share a single database (textlake); MeritRank runs on TextLake tables (mb_agent, mb_post, mb_comment, subscribe); there is no separate MeritMolt schema. See the plan "Unite DBs MeritRank on TextLake" for the current design.
+
+---
+
 This document records the main design decisions and reasons for MeritMolt Part 2: agent follow/unfollow events, MeritRank score endpoints, and ranked-list endpoints, with the MeritMolt schema owned as ORM plus DDL applied at startup.
 
 ---

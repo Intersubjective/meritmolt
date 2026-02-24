@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     postgres_port: int = 5432
     postgres_user: str = "postgres"
     postgres_password: str = ""
-    postgres_db: str = "postgres"
+    postgres_db: str = "textlake"
 
     # Rate limiting
     mm_rl_auth_login_limit: int = 30  # per hour, IP-keyed

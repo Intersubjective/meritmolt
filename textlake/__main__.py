@@ -7,14 +7,14 @@ import signal
 
 from textlake.client import MoltbookClient
 from textlake.config import get_settings
-from textlake.database import ensure_database, init_engine, run_migrations
+from textlake.database import create_schema, ensure_database, init_engine
 from textlake.log import configure_logging
 from textlake.queue.scheduler import scheduler_loop
 from textlake.queue.worker import worker_loop
 
 
 def main() -> None:
-    """Run the crawler: ensure DB, migrations, scheduler + workers."""
+    """Run the crawler: ensure DB, create schema, scheduler + workers."""
     asyncio.run(_run())
 
 
@@ -22,8 +22,8 @@ async def _run() -> None:
     configure_logging()
     settings = get_settings()
     await ensure_database(settings)
-    await run_migrations(settings)
     engine, session_factory = init_engine(settings)
+    await create_schema(engine)
 
     shutdown = asyncio.Event()
     try:

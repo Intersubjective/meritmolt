@@ -67,7 +67,7 @@ services:
       - POSTGRES_PORT=5432
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD
-      - POSTGRES_DB=postgres
+      - POSTGRES_DB=textlake
       - MM_MOLTBOOK_APP_KEY
       - MM_MOLTBOOK_API_BASE
       - MM_JWT_PRIVATE_KEYS

@@ -27,7 +27,7 @@ async def get_user_scores(
     result = await session.execute(
         text("""
             SELECT * FROM user_get_scores(
-                (SELECT u FROM public."user" u WHERE u.id = :user_id),
+                (SELECT a FROM public.mb_agent a WHERE a.id = :user_id),
                 :actor_id, :board)
         """),
         {"user_id": user_id, "actor_id": actor_id, "board": board},
@@ -45,7 +45,7 @@ async def get_post_scores(
     result = await session.execute(
         text("""
             SELECT * FROM post_get_scores(
-                (SELECT p FROM public.post p WHERE p.id = :post_id),
+                (SELECT p FROM public.mb_post p WHERE p.id = :post_id),
                 :actor_id, :board)
         """),
         {"post_id": post_id, "actor_id": actor_id, "board": board},
@@ -63,7 +63,7 @@ async def get_comment_scores(
     result = await session.execute(
         text("""
             SELECT * FROM comment_get_scores(
-                (SELECT c FROM public.comment c WHERE c.id = :comment_id),
+                (SELECT c FROM public.mb_comment c WHERE c.id = :comment_id),
                 :actor_id, :board)
         """),
         {"comment_id": comment_id, "actor_id": actor_id, "board": board},
@@ -129,7 +129,7 @@ async def get_comment_ranking(
     result = await session.execute(
         text("""
             SELECT c.id, ms.src_score, ms.dst_score
-            FROM public.comment c
+            FROM public.mb_comment c
             JOIN LATERAL comment_get_scores(c, :actor_id, :board) ms ON TRUE
             WHERE c.post_id = :post_id
             ORDER BY ms.src_score DESC

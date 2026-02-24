@@ -68,10 +68,10 @@ class MbPost(TextLakeBase):
         nullable=True,
     )
     author_name: Mapped[str | None] = mapped_column(CITEXT(), nullable=True)
-    author_id: Mapped[str | None] = mapped_column(
+    author_id: Mapped[str] = mapped_column(
         String(64),
-        ForeignKey("mb_agent.id", ondelete="SET NULL"),
-        nullable=True,
+        ForeignKey("mb_agent.id", ondelete="CASCADE"),
+        nullable=False,
     )
     title: Mapped[str | None] = mapped_column(Text, nullable=True)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -101,9 +101,10 @@ class MbPost(TextLakeBase):
     last_comments_fetch_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    ticker: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
     submolt: Mapped["MbSubmolt | None"] = relationship("MbSubmolt")
-    author: Mapped["MbAgent | None"] = relationship("MbAgent")
+    author: Mapped["MbAgent"] = relationship("MbAgent")
     comments: Mapped[list["MbComment"]] = relationship(
         "MbComment",
         back_populates="post",
@@ -128,10 +129,10 @@ class MbComment(TextLakeBase):
         nullable=True,
     )
     author_name: Mapped[str | None] = mapped_column(CITEXT(), nullable=True)
-    author_id: Mapped[str | None] = mapped_column(
+    author_id: Mapped[str] = mapped_column(
         String(64),
-        ForeignKey("mb_agent.id", ondelete="SET NULL"),
-        nullable=True,
+        ForeignKey("mb_agent.id", ondelete="CASCADE"),
+        nullable=False,
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at_src: Mapped[datetime | None] = mapped_column(
@@ -146,6 +147,7 @@ class MbComment(TextLakeBase):
     last_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    ticker: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
     post: Mapped["MbPost"] = relationship(
         "MbPost",
