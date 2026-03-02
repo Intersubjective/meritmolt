@@ -7,8 +7,8 @@ import uuid
 from pydantic import BaseModel
 
 
-class LoginResponse(BaseModel):
-    """Response for POST /v1/auth/login."""
+class TokenResponse(BaseModel):
+    """Response for POST /v1/auth/login and POST /v1/auth/refresh."""
 
     access_token: str
     refresh_token: str
@@ -20,15 +20,6 @@ class RefreshRequest(BaseModel):
     """Body for POST /v1/auth/refresh."""
 
     refresh_token: str
-
-
-class RefreshResponse(BaseModel):
-    """Response for POST /v1/auth/refresh."""
-
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-    expires_in: int
 
 
 class LogoutRequest(BaseModel):

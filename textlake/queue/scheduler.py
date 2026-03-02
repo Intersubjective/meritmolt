@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
-import orjson
 from sqlalchemy import delete, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from textlake.handlers.enqueue import dedupe_key
 from textlake.models.crawl import CrawlTask
 from textlake.models.crawl import RawCapture as RawCaptureModel
 
@@ -21,12 +19,6 @@ POLL_FEED_INTERVAL = 60
 RAW_CAPTURE_PRUNE_INTERVAL = 3600
 PARKED_RECOVERY_AFTER_SECONDS = 3600
 RAW_CAPTURE_TTL_HOURS = 24
-
-
-def _dedupe_key(kind: str, params: dict[str, Any]) -> str:
-    """Stable key for deduplication: sha256(kind + canonical_json(params))."""
-    canonical = orjson.dumps(params or {}, option=orjson.OPT_SORT_KEYS)
-    return hashlib.sha256(f"{kind}:{canonical.decode()}".encode()).hexdigest()
 
 
 async def scheduler_loop(
@@ -52,7 +44,7 @@ async def scheduler_loop(
                     or (now - last_list_submolts).total_seconds()
                     >= LIST_SUBMOLTS_INTERVAL
                 ):
-                    key = _dedupe_key("list_submolts", {})
+                    key = dedupe_key("list_submolts", {})
                     stmt = pg_insert(CrawlTask).values(
                         kind="list_submolts",
                         params={},
@@ -69,7 +61,7 @@ async def scheduler_loop(
                         last is None
                         or (now - last).total_seconds() >= POLL_FEED_INTERVAL
                     ):
-                        key = _dedupe_key("poll_posts_feed", {"sort": sort})
+                        key = dedupe_key("poll_posts_feed", {"sort": sort})
                         stmt = pg_insert(CrawlTask).values(
                             kind="poll_posts_feed",
                             params={"sort": sort, "limit": 25},

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import math
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -14,6 +13,7 @@ from typing import Any, cast
 import jwt
 
 from meritmolt.config import Settings
+from meritmolt.middleware_utils import send_json_response
 
 logger = logging.getLogger(__name__)
 
@@ -216,25 +216,6 @@ def _get_bucket_params(group: RouteGroup, settings: Settings) -> tuple[float, fl
     return 0.0, 0.0
 
 
-async def _send_json_response(
-    send: Any,
-    status: int,
-    body: dict[str, Any],
-    retry_after: float,
-) -> None:
-    """Send a JSON response with Retry-After header (ASGI send)."""
-    import json
-
-    payload = json.dumps(body).encode("utf-8")
-    retry_after_int = max(1, math.ceil(retry_after))
-    headers = [
-        (b"content-type", b"application/json"),
-        (b"retry-after", str(retry_after_int).encode()),
-    ]
-    await send({"type": "http.response.start", "status": status, "headers": headers})
-    await send({"type": "http.response.body", "body": payload})
-
-
 class RateLimitMiddleware:
     """Pure ASGI rate-limit middleware: token bucket per key per route group."""
 
@@ -283,4 +264,4 @@ class RateLimitMiddleware:
             "retry_after": retry_after,
             "request_id": request_id,
         }
-        await _send_json_response(send, 429, body, retry_after)
+        await send_json_response(send, 429, body, retry_after)

@@ -8,8 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from meritmolt.auth.dependencies import get_db_session
-from meritmolt.schema import queries
-from meritmolt.schema.queries import CommentRankRow, MutualScoreRow
+from meritmolt.schema import existence, queries
 from meritmolt.schemas import (
     PAGINATION_LIMIT_DEFAULT,
     PAGINATION_LIMIT_MAX,
@@ -19,10 +18,6 @@ from meritmolt.schemas import (
 )
 
 router = APIRouter(prefix="/v1/users", tags=["rank"])
-
-
-def _to_mutual_scores(rows: list[MutualScoreRow]) -> list[MutualScore]:
-    return [MutualScore(**r) for r in rows]
 
 
 @router.get("/{subject_user_id}/rank/users", response_model=list[MutualScore])
@@ -40,10 +35,10 @@ async def get_ranked_users(
     session: AsyncSession = Depends(get_db_session),
 ) -> list[MutualScore]:
     """Return ranked users (mutual_score) for board, ordered by src_score DESC."""
-    rows = await queries.get_user_ranking(
+    await existence.ensure_agent_exists(session, subject_user_id)
+    return await queries.get_user_ranking(
         session, board, subject_user_id, limit, offset
     )
-    return _to_mutual_scores(rows)
 
 
 @router.get(
@@ -63,10 +58,10 @@ async def get_ranked_posts(
     session: AsyncSession = Depends(get_db_session),
 ) -> list[MutualScore]:
     """Return ranked posts (mutual_score) for board via my_field, src_score DESC."""
-    rows = await queries.get_post_ranking(
+    await existence.ensure_agent_exists(session, subject_user_id)
+    return await queries.get_post_ranking(
         session, board, subject_user_id, limit, offset
     )
-    return _to_mutual_scores(rows)
 
 
 @router.get(
@@ -88,7 +83,8 @@ async def get_ranked_comments(
     session: AsyncSession = Depends(get_db_session),
 ) -> list[CommentRank]:
     """Return ranked comments for a post (id, scores), ordered by src_score DESC."""
-    rows: list[CommentRankRow] = await queries.get_comment_ranking(
+    await existence.ensure_agent_exists(session, subject_user_id)
+    await existence.ensure_post_exists(session, post_id)
+    return await queries.get_comment_ranking(
         session, post_id, board, subject_user_id, limit, offset
     )
-    return [CommentRank(**r) for r in rows]

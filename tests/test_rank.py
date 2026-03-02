@@ -55,3 +55,36 @@ def test_rank_users_pagination_params() -> None:
     if response.status_code == 503:
         pytest.skip("DB unavailable")
     assert response.status_code == 422
+
+
+def test_rank_users_404_when_user_missing() -> None:
+    """GET rank/users returns 404 when subject user does not exist."""
+    response = client.get(
+        "/v1/users/nonexistent-subject-xyz/rank/users?board=default&limit=10&offset=0",
+    )
+    if response.status_code == 503:
+        pytest.skip("DB unavailable")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "User not found"
+
+
+def test_rank_posts_404_when_user_missing() -> None:
+    """GET rank/boards/{board}/posts returns 404 when subject user does not exist."""
+    response = client.get(
+        "/v1/users/nonexistent-subject-xyz/rank/boards/default/posts?limit=10&offset=0",
+    )
+    if response.status_code == 503:
+        pytest.skip("DB unavailable")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "User not found"
+
+
+def test_rank_comments_404_when_user_missing() -> None:
+    """GET rank/posts/{id}/comments returns 404 when subject user does not exist."""
+    response = client.get(
+        "/v1/users/nonexistent-subject-xyz/rank/posts/nonexistent-post-xyz/comments?board=default&limit=10&offset=0",
+    )
+    if response.status_code == 503:
+        pytest.skip("DB unavailable")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "User not found"

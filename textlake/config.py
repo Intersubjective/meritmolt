@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,6 +32,13 @@ class CrawlerSettings(BaseSettings):
     postgres_user: str = "postgres"
     postgres_password: str = ""
     postgres_db: str = "textlake"
+
+    @field_validator("postgres_db")
+    @classmethod
+    def _no_quotes_in_db_name(cls, v: str) -> str:
+        if '"' in v:
+            raise ValueError("postgres_db must not contain double-quote characters")
+        return v
 
     @property
     def database_url(self) -> str:

@@ -63,7 +63,6 @@ class Settings(BaseSettings):
     mm_rl_reads_sustain: int = 300  # per minute
     mm_rl_bucket_max_keys: int = 10_000
     mm_rl_bucket_ttl_seconds: int = 3600
-    mm_rl_redis_url: str | None = None  # None = in-process; set for multi-instance
 
     # Backpressure
     mm_bp_global_max_concurrent: int = 100

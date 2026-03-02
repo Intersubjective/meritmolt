@@ -1,8 +1,10 @@
 """MeritMolt FastAPI app: health and auth."""
 
+import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 from meritmolt import database as db
 from meritmolt.auth.router import router as auth_router
@@ -13,6 +15,8 @@ from meritmolt.events.router import router as events_router
 from meritmolt.rank.router import router as rank_router
 from meritmolt.ratelimit import RateLimitMiddleware
 from meritmolt.scores.router import router as scores_router
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -26,6 +30,23 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Catch unhandled exceptions; return 500 with generic message, log details."""
+    if isinstance(exc, HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+        )
+    logger.exception("Unhandled exception: %s", exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
+
 app.include_router(auth_router)
 app.include_router(events_router)
 app.include_router(scores_router)
@@ -34,11 +55,6 @@ app.include_router(rank_router)
 settings = get_settings()
 app.add_middleware(RateLimitMiddleware, settings=settings)
 app.add_middleware(BackpressureMiddleware, settings=settings)
-
-
-@app.get("/")
-def root() -> dict[str, str]:
-    return {"status": "ok"}
 
 
 @app.get("/health")

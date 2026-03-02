@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, ForeignKey, Index, String, func, text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.asyncio import (
     AsyncConnection,
     AsyncEngine,
@@ -27,7 +27,7 @@ from meritmolt.schema.ddl import (
     PGMER_HELPERS_SQL,
     TRIGGER_FUNCTIONS_SQL,
     TRIGGERS_SQL,
-    VIEWS_SQL,
+    TYPES_SQL,
     WRAPPER_FUNCTIONS_SQL,
 )
 
@@ -199,7 +199,7 @@ async def init_db(settings: Settings) -> None:
         await _exec_sql_batch(conn, EXTENSION_SQL)
         await conn.run_sync(TextLakeBase.metadata.create_all)
         await _exec_sql_batch(conn, PGMER_HELPERS_SQL)
-        await _exec_sql_batch(conn, VIEWS_SQL)
+        await _exec_sql_batch(conn, TYPES_SQL)
         await _exec_sql_batch(conn, TRIGGER_FUNCTIONS_SQL)
         await _exec_sql_batch(conn, TRIGGERS_SQL)
         await _exec_sql_batch(conn, WRAPPER_FUNCTIONS_SQL)
@@ -238,7 +238,6 @@ class MmAgent(Base):
         default=_utc_now,
         onupdate=_utc_now,
     )
-    cached_stats: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

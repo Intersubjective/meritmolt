@@ -57,10 +57,6 @@ def _parse_raw_token(raw_token: str) -> tuple[uuid.UUID, bytes] | None:
         return None
 
 
-def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
 async def mint_refresh_token(
     session: AsyncSession,
     agent_id: uuid.UUID,
@@ -73,7 +69,7 @@ async def mint_refresh_token(
     Create a new refresh token for the agent; enforce max active per agent.
     Returns raw token string: <token_uuid_hex>.<base64url_secret>.
     """
-    now = _utc_now()
+    now = datetime.now(timezone.utc)
     expires_at = datetime.fromtimestamp(
         now.timestamp() + settings.mm_refresh_ttl_seconds,
         tz=timezone.utc,
@@ -156,14 +152,14 @@ async def rotate_refresh_token(
             detail="Refresh token reused; all sessions revoked. Re-login via MoltBook.",
         )
 
-    if row.expires_at <= _utc_now():
+    if row.expires_at <= datetime.now(timezone.utc):
         raise HTTPException(status_code=401, detail="Refresh token expired")
 
     if not _verify_secret(row.token_hash, secret):
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
     # Revoke current token
-    row.revoked_at = _utc_now()
+    row.revoked_at = datetime.now(timezone.utc)
     await session.flush()
 
     # Load agent for return and for mint
@@ -190,13 +186,13 @@ async def revoke_token(session: AsyncSession, raw_token: str) -> None:
     token_id, _ = parsed
     row = await session.get(MmRefreshToken, token_id)
     if row is not None and row.revoked_at is None:
-        row.revoked_at = _utc_now()
+        row.revoked_at = datetime.now(timezone.utc)
         await session.flush()
 
 
 async def revoke_all_agent_tokens(session: AsyncSession, agent_id: uuid.UUID) -> None:
     """Revoke all active refresh tokens for the agent."""
-    now = _utc_now()
+    now = datetime.now(timezone.utc)
     await session.execute(
         update(MmRefreshToken)
         .where(

@@ -2,19 +2,10 @@
 
 from __future__ import annotations
 
-from typing import TypedDict, cast
-
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
-class MutualScoreRow(TypedDict):
-    """Row from user/post/comment_get_scores, rating, my_field."""
-
-    src: str
-    dst: str
-    src_score: float
-    dst_score: float
+from meritmolt.schemas import CommentRank, MutualScore
 
 
 async def get_user_scores(
@@ -22,7 +13,7 @@ async def get_user_scores(
     user_id: str,
     actor_id: str,
     board: str,
-) -> list[MutualScoreRow]:
+) -> list[MutualScore]:
     """Return mutual_score rows for a user relative to actor in board context."""
     result = await session.execute(
         text("""
@@ -32,7 +23,7 @@ async def get_user_scores(
         """),
         {"user_id": user_id, "actor_id": actor_id, "board": board},
     )
-    return [cast(MutualScoreRow, dict(r._mapping)) for r in result]
+    return [MutualScore(**dict(r._mapping)) for r in result]
 
 
 async def get_post_scores(
@@ -40,7 +31,7 @@ async def get_post_scores(
     post_id: str,
     actor_id: str,
     board: str,
-) -> list[MutualScoreRow]:
+) -> list[MutualScore]:
     """Return mutual_score rows for a post relative to actor in board context."""
     result = await session.execute(
         text("""
@@ -50,7 +41,7 @@ async def get_post_scores(
         """),
         {"post_id": post_id, "actor_id": actor_id, "board": board},
     )
-    return [cast(MutualScoreRow, dict(r._mapping)) for r in result]
+    return [MutualScore(**dict(r._mapping)) for r in result]
 
 
 async def get_comment_scores(
@@ -58,7 +49,7 @@ async def get_comment_scores(
     comment_id: str,
     actor_id: str,
     board: str,
-) -> list[MutualScoreRow]:
+) -> list[MutualScore]:
     """Return mutual_score rows for a comment relative to actor in board context."""
     result = await session.execute(
         text("""
@@ -68,7 +59,7 @@ async def get_comment_scores(
         """),
         {"comment_id": comment_id, "actor_id": actor_id, "board": board},
     )
-    return [cast(MutualScoreRow, dict(r._mapping)) for r in result]
+    return [MutualScore(**dict(r._mapping)) for r in result]
 
 
 async def get_user_ranking(
@@ -77,7 +68,7 @@ async def get_user_ranking(
     actor_id: str,
     limit: int,
     offset: int,
-) -> list[MutualScoreRow]:
+) -> list[MutualScore]:
     """Return ranked users (mutual_score) for board, ordered by src_score DESC."""
     result = await session.execute(
         text("""
@@ -87,7 +78,7 @@ async def get_user_ranking(
         """),
         {"board": board, "actor_id": actor_id, "limit": limit, "offset": offset},
     )
-    return [cast(MutualScoreRow, dict(r._mapping)) for r in result]
+    return [MutualScore(**dict(r._mapping)) for r in result]
 
 
 async def get_post_ranking(
@@ -96,7 +87,7 @@ async def get_post_ranking(
     actor_id: str,
     limit: int,
     offset: int,
-) -> list[MutualScoreRow]:
+) -> list[MutualScore]:
     """Return ranked posts (mutual_score) for board via my_field, src_score DESC."""
     result = await session.execute(
         text("""
@@ -106,15 +97,7 @@ async def get_post_ranking(
         """),
         {"board": board, "actor_id": actor_id, "limit": limit, "offset": offset},
     )
-    return [cast(MutualScoreRow, dict(r._mapping)) for r in result]
-
-
-class CommentRankRow(TypedDict):
-    """Row from ranked comments for a post."""
-
-    id: str
-    src_score: float
-    dst_score: float
+    return [MutualScore(**dict(r._mapping)) for r in result]
 
 
 async def get_comment_ranking(
@@ -124,7 +107,7 @@ async def get_comment_ranking(
     actor_id: str,
     limit: int,
     offset: int,
-) -> list[CommentRankRow]:
+) -> list[CommentRank]:
     """Return ranked comments for a post (id, scores), ordered by src_score DESC."""
     result = await session.execute(
         text("""
@@ -143,4 +126,4 @@ async def get_comment_ranking(
             "offset": offset,
         },
     )
-    return [cast(CommentRankRow, dict(r._mapping)) for r in result]
+    return [CommentRank(**dict(r._mapping)) for r in result]

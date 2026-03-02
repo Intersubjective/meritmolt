@@ -14,10 +14,9 @@ from meritmolt.auth.jwt import create_access_token
 from meritmolt.auth.moltbook import verify_identity
 from meritmolt.auth.schemas import (
     AgentInfo,
-    LoginResponse,
     LogoutRequest,
     RefreshRequest,
-    RefreshResponse,
+    TokenResponse,
 )
 from meritmolt.auth.tokens import mint_refresh_token, revoke_token, rotate_refresh_token
 from meritmolt.config import get_settings
@@ -47,12 +46,12 @@ def _require_identity_header(
     return x_moltbook_identity.strip()
 
 
-@router.post("/login", response_model=LoginResponse)
+@router.post("/login", response_model=TokenResponse)
 async def login(
     request: Request,
     identity_token: str = Depends(_require_identity_header),
     session: AsyncSession = Depends(get_db_session),
-) -> LoginResponse:
+) -> TokenResponse:
     """
     Exchange MoltBook identity token for MM access + refresh tokens.
     Header: X-Moltbook-Identity: <mb_identity_token>
@@ -91,7 +90,7 @@ async def login(
     )
     access = create_access_token(agent, settings)
 
-    return LoginResponse(
+    return TokenResponse(
         access_token=access,
         refresh_token=refresh_raw,
         token_type="bearer",
@@ -99,12 +98,12 @@ async def login(
     )
 
 
-@router.post("/refresh", response_model=RefreshResponse)
+@router.post("/refresh", response_model=TokenResponse)
 async def refresh(
     request: Request,
     body: RefreshRequest,
     session: AsyncSession = Depends(get_db_session),
-) -> RefreshResponse:
+) -> TokenResponse:
     """Rotate refresh token; return new access + refresh tokens."""
     settings = get_settings()
     new_raw, agent = await rotate_refresh_token(
@@ -115,7 +114,7 @@ async def refresh(
         ip=_client_ip(request),
     )
     access = create_access_token(agent, settings)
-    return RefreshResponse(
+    return TokenResponse(
         access_token=access,
         refresh_token=new_raw,
         token_type="bearer",

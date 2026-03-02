@@ -9,48 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from textlake.client import MoltbookClient
 from textlake.handlers.enqueue import enqueue
 from textlake.handlers.registry import register
-from textlake.ids import synthetic_agent_id, synthetic_submolt_id
+from textlake.ids import synthetic_submolt_id
 from textlake.models.timeseries import MbPostStatsTs
 from textlake.upsert import upsert_agent, upsert_post, upsert_submolt
-
-
-def _parse_ts(raw: object) -> datetime | None:
-    if raw is None:
-        return None
-    if isinstance(raw, (int, float)):
-        return datetime.fromtimestamp(float(raw), tz=timezone.utc)
-    if isinstance(raw, str):
-        try:
-            if "T" in raw or "Z" in raw or "+" in raw:
-                return datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(
-                    timezone.utc
-                )
-            return None
-        except ValueError:
-            return None
-    return None
-
-
-def _agent_stub(data: dict) -> dict | None:
-    """Build mb_agent stub from embedded author."""
-    name = (
-        data.get("name") or data.get("username") or data.get("author_name") or ""
-    ).strip()
-    if not name:
-        return None
-    aid = data.get("id") or data.get("agent_id") or synthetic_agent_id(name)
-    if isinstance(aid, dict):
-        aid = aid.get("id") or synthetic_agent_id(name)
-    return {
-        "id": str(aid),
-        "name": name,
-        "description": data.get("description"),
-        "created_at_src": _parse_ts(data.get("created_at")),
-        "karma": data.get("karma"),
-        "is_claimed": data.get("is_claimed"),
-        "is_human": data.get("is_human"),
-        "raw_json": data,
-    }
+from textlake.utils import agent_stub, parse_ts
 
 
 def _submolt_stub(data: dict) -> dict | None:
@@ -66,7 +28,7 @@ def _submolt_stub(data: dict) -> dict | None:
         "name": name,
         "display_name": data.get("display_name") or name,
         "description": data.get("description"),
-        "created_at_src": _parse_ts(data.get("created_at")),
+        "created_at_src": parse_ts(data.get("created_at")),
         "raw_json": data,
     }
 
@@ -78,7 +40,7 @@ def _post_row(data: dict, is_authoritative: bool = False) -> dict | None:
         return None
     author = data.get("author") or data
     submolt = data.get("submolt") or data
-    agent_stub = _agent_stub(author) if isinstance(author, dict) else None
+    agent = agent_stub(author) if isinstance(author, dict) else None
     submolt_stub = _submolt_stub(submolt) if isinstance(submolt, dict) else None
     submolt_name = (
         submolt.get("name") or submolt.get("slug")
@@ -89,13 +51,13 @@ def _post_row(data: dict, is_authoritative: bool = False) -> dict | None:
         "id": str(pid),
         "submolt_name": submolt_name,
         "submolt_id": submolt_stub["id"] if submolt_stub else None,
-        "author_name": agent_stub["name"] if agent_stub else None,
-        "author_id": agent_stub["id"] if agent_stub else None,
+        "author_name": agent["name"] if agent else None,
+        "author_id": agent["id"] if agent else None,
         "title": data.get("title"),
         "content": data.get("content") or data.get("body"),
         "url": data.get("url"),
-        "created_at_src": _parse_ts(data.get("created_at")),
-        "updated_at_src": _parse_ts(data.get("updated_at")),
+        "created_at_src": parse_ts(data.get("created_at")),
+        "updated_at_src": parse_ts(data.get("updated_at")),
         "upvotes": data.get("upvotes"),
         "downvotes": data.get("downvotes"),
         "comment_count": data.get("comment_count") or data.get("comments_count"),
@@ -126,7 +88,7 @@ async def handle_poll_posts_feed(
         author = item.get("author")
         submolt = item.get("submolt")
         if isinstance(author, dict):
-            stub = _agent_stub(author)
+            stub = agent_stub(author)
             if stub:
                 await upsert_agent(session, stub, is_authoritative=False)
         if isinstance(submolt, dict):
@@ -180,7 +142,7 @@ async def handle_fetch_post(
     author = data.get("author")
     submolt = data.get("submolt")
     if isinstance(author, dict):
-        stub = _agent_stub(author)
+        stub = agent_stub(author)
         if stub:
             await upsert_agent(session, stub, is_authoritative=False)
     if isinstance(submolt, dict):

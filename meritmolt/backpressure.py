@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import math
 import uuid
 from typing import Any
 
 from meritmolt.config import Settings
+from meritmolt.middleware_utils import send_json_response
 from meritmolt.ratelimit import RouteGroup
 
 logger = logging.getLogger(__name__)
@@ -58,22 +57,6 @@ class ConcurrencyGuard:
         self._global_sem.release()
 
 
-async def _send_json_response(
-    send: Any,
-    status: int,
-    body: dict[str, Any],
-    retry_after: float = 60.0,
-) -> None:
-    payload = json.dumps(body).encode("utf-8")
-    retry_after_int = max(1, math.ceil(retry_after))
-    headers = [
-        (b"content-type", b"application/json"),
-        (b"retry-after", str(retry_after_int).encode()),
-    ]
-    await send({"type": "http.response.start", "status": status, "headers": headers})
-    await send({"type": "http.response.body", "body": payload})
-
-
 def _get_request_id_from_scope(scope: dict[str, Any]) -> str:
     raw_headers = scope.get("headers") or []
     for raw_name, raw_value in raw_headers:
@@ -109,7 +92,7 @@ class BackpressureMiddleware:
                 group.value,
                 request_id,
             )
-            await _send_json_response(
+            await send_json_response(
                 send,
                 503,
                 {
@@ -135,7 +118,7 @@ class BackpressureMiddleware:
                         "deadline_exceeded route_group=reads request_id=%s",
                         request_id,
                     )
-                    await _send_json_response(
+                    await send_json_response(
                         send,
                         503,
                         {

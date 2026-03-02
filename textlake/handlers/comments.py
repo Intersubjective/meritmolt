@@ -10,46 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from textlake.client import MoltbookClient
 from textlake.handlers.registry import register
-from textlake.ids import synthetic_agent_id
 from textlake.models.entities import MbComment, MbPost
 from textlake.models.timeseries import MbCommentStatsTs
 from textlake.upsert import upsert_agent, upsert_comment
-
-
-def _parse_ts(raw: object) -> datetime | None:
-    if raw is None:
-        return None
-    if isinstance(raw, (int, float)):
-        return datetime.fromtimestamp(float(raw), tz=timezone.utc)
-    if isinstance(raw, str):
-        try:
-            if "T" in raw or "Z" in raw or "+" in raw:
-                return datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(
-                    timezone.utc
-                )
-            return None
-        except ValueError:
-            return None
-    return None
-
-
-def _agent_stub(data: dict) -> dict | None:
-    name = (data.get("name") or data.get("username") or "").strip()
-    if not name:
-        return None
-    aid = data.get("id") or data.get("agent_id") or synthetic_agent_id(name)
-    if isinstance(aid, dict):
-        aid = aid.get("id") or synthetic_agent_id(name)
-    return {
-        "id": str(aid),
-        "name": name,
-        "description": data.get("description"),
-        "created_at_src": _parse_ts(data.get("created_at")),
-        "karma": data.get("karma"),
-        "is_claimed": data.get("is_claimed"),
-        "is_human": data.get("is_human"),
-        "raw_json": data,
-    }
+from textlake.utils import agent_stub, parse_ts
 
 
 def _comment_row(data: dict, post_id: str) -> dict | None:
@@ -57,16 +21,16 @@ def _comment_row(data: dict, post_id: str) -> dict | None:
     if not cid:
         return None
     author = data.get("author") or data
-    agent_stub = _agent_stub(author) if isinstance(author, dict) else None
+    agent = agent_stub(author) if isinstance(author, dict) else None
     parent_id = data.get("parent_id")
     return {
         "id": str(cid),
         "post_id": post_id,
         "parent_id": str(parent_id) if parent_id is not None else None,
-        "author_name": agent_stub["name"] if agent_stub else None,
-        "author_id": agent_stub["id"] if agent_stub else None,
+        "author_name": agent["name"] if agent else None,
+        "author_id": agent["id"] if agent else None,
         "content": data.get("content") or data.get("body") or "",
-        "created_at_src": _parse_ts(data.get("created_at")),
+        "created_at_src": parse_ts(data.get("created_at")),
         "upvotes": data.get("upvotes"),
         "downvotes": data.get("downvotes"),
         "raw_json": data,
@@ -132,7 +96,7 @@ async def handle_fetch_post_comments(
             continue
         author = item.get("author")
         if isinstance(author, dict):
-            stub = _agent_stub(author)
+            stub = agent_stub(author)
             if stub:
                 await upsert_agent(session, stub, is_authoritative=False)
         row = _comment_row(item, post_id)

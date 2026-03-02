@@ -36,6 +36,11 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["meritmolt", "textlake"]
 
+[tool.pytest.ini_options]
+markers = [
+    "integration: tests that require full stack (docker compose up -d)",
+]
+
 [tool.ruff]
 line-length = 88
 target-version = "py314"
