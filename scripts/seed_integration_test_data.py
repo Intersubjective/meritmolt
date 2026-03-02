@@ -13,8 +13,12 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 
 import asyncpg
+
+MAX_RETRIES = 10
+RETRY_DELAY_SEC = 2
 
 
 async def main() -> None:
@@ -24,13 +28,27 @@ async def main() -> None:
     password = os.environ.get("POSTGRES_PASSWORD", "")
     db = os.environ.get("POSTGRES_DB", "textlake")
 
-    conn = await asyncpg.connect(
-        host=host,
-        port=port,
-        user=user,
-        password=password,
-        database=db,
-    )
+    conn = None
+    last_err: Exception | None = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            conn = await asyncpg.connect(
+                host=host,
+                port=port,
+                user=user,
+                password=password,
+                database=db,
+            )
+            break
+        except Exception as e:
+            last_err = e
+            if attempt < MAX_RETRIES - 1:
+                print(f"Postgres not ready (attempt {attempt + 1}/{MAX_RETRIES}): {e}")
+                time.sleep(RETRY_DELAY_SEC)
+            else:
+                raise last_err from last_err
+
+    assert conn is not None
     try:
         await conn.execute("""
             INSERT INTO mb_agent (id, name, raw_json, first_seen_at, last_seen_at)

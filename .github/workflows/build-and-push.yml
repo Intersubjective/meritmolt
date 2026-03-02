@@ -132,17 +132,17 @@ jobs:
           " >> $GITHUB_ENV
       - name: Start full stack
         run: docker compose -f compose.yaml -f compose.ci.yaml up -d postgres meritrank meritmolt
-      - name: Wait for MeritMolt health
+      - name: Wait for MeritMolt and Postgres
         run: |
           for i in $(seq 1 60); do
-            if curl -sf http://localhost:8000/health > /dev/null; then
-              echo "MeritMolt is ready"
+            if curl -sf http://localhost:8000/db | grep -q '"db":true'; then
+              echo "MeritMolt and Postgres are ready"
               exit 0
             fi
-            echo "Waiting for MeritMolt... ($i/60)"
+            echo "Waiting for MeritMolt and Postgres... ($i/60)"
             sleep 2
           done
-          echo "MeritMolt did not become ready"
+          echo "MeritMolt/Postgres did not become ready"
           exit 1
       - name: Seed integration test data
         run: POSTGRES_PASSWORD=test uv run python scripts/seed_integration_test_data.py
