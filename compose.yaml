@@ -1,35 +1,27 @@
 name: meritmolt
 
-services:
-  common:
-    init: true
-    image: scratch
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: "1"
-    environment:
-      - POSTGRES_PASSWORD
-      - MM_MOLTBOOK_APP_KEY
-      - MM_MOLTBOOK_API_BASE
-      - MM_JWT_PRIVATE_KEYS
-      - MM_JWT_PUBLIC_KEYS
-      - MM_ACCESS_TTL_SECONDS
-      - MM_REFRESH_TTL_SECONDS
-      - MM_REFRESH_MAX_ACTIVE_PER_AGENT
-      - MM_HTTP_TIMEOUT_SECONDS
-      - MM_HTTP_RETRY_MAX_ATTEMPTS
-      - MM_MERITRANK_INIT_ON_STARTUP
+x-common: &common
+  init: true
+  restart: unless-stopped
+  deploy:
+    resources:
+      limits:
+        memory: 512M
+        cpus: "1"
 
+services:
   caddy:
-    extends:
-      service: common
+    <<: *common
     hostname: caddy
     container_name: caddy
     image: caddy:2
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
     depends_on:
-      - meritmolt
+      meritmolt:
+        condition: service_healthy
     ports:
       - "80:80"
       - "443:443"
@@ -40,27 +32,34 @@ services:
       - caddy_data:/data
 
   postgres:
-    extends:
-      service: common
+    <<: *common
     hostname: postgres
     container_name: postgres
     # Image provides MeritMolt schema (pgmer2 extension); image name is legacy.
     image: vbulavintsev/postgres-tentura:v0.3.26
     depends_on:
-      - meritrank
+      meritrank:
+        condition: service_started
     volumes:
       - pg_data:/var/lib/postgresql/data
     environment:
-      - 'MERITRANK_SERVICE_URL=tcp://meritrank:10234'
+      - POSTGRES_PASSWORD
       - POSTGRES_DB=textlake
+      - 'MERITRANK_SERVICE_URL=tcp://meritrank:10234'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   meritrank:
-    extends:
-      service: common
+    <<: *common
     hostname: meritrank
     container_name: meritrank
     image: vbulavintsev/meritrank-service:v0.2.59
     read_only: true
+    cap_drop:
+      - ALL
     environment:
       - 'MERITRANK_NUM_WALKS=100'
       - 'MERITRANK_ZERO_OPINION_FACTOR=2'
@@ -70,8 +69,7 @@ services:
       - "MERITRANK_OMIT_NEG_EDGES_SCORES=true"
 
   meritmolt:
-    extends:
-      service: common
+    <<: *common
     hostname: meritmolt
     container_name: meritmolt
     image: ghcr.io/intersubjective/meritmolt:${MM_IMAGE_TAG:-latest}
@@ -81,7 +79,8 @@ services:
     tmpfs:
       - /tmp
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     ports:
       - "8000:8000"
     environment:
@@ -99,6 +98,7 @@ services:
       - MM_REFRESH_MAX_ACTIVE_PER_AGENT
       - MM_HTTP_TIMEOUT_SECONDS
       - MM_HTTP_RETRY_MAX_ATTEMPTS
+      - MM_MERITRANK_INIT_ON_STARTUP
       - MM_RL_AUTH_LOGIN_LIMIT
       - MM_RL_AUTH_REFRESH_LIMIT
       - MM_RL_WRITES_BURST
@@ -112,10 +112,15 @@ services:
       - MM_BP_WRITES_MAX_CONCURRENT
       - MM_BP_AUTH_MAX_CONCURRENT
       - MM_BP_REQUEST_DEADLINE_SECONDS
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   textlake:
-    extends:
-      service: common
+    <<: *common
     hostname: textlake
     container_name: textlake
     build: .
@@ -125,7 +130,8 @@ services:
     tmpfs:
       - /tmp
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     environment:
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
