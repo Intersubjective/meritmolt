@@ -145,7 +145,15 @@ jobs:
           echo "MeritMolt/Postgres did not become ready"
           exit 1
       - name: Seed integration test data
-        run: POSTGRES_PASSWORD=test uv run python scripts/seed_integration_test_data.py
+        run: |
+          docker compose -f compose.yaml -f compose.ci.yaml run --rm \
+            -v ${{ github.workspace }}/scripts:/app/scripts:ro \
+            -e POSTGRES_HOST=localhost \
+            -e POSTGRES_PORT=5432 \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=test \
+            -e POSTGRES_DB=textlake \
+            meritmolt python /app/scripts/seed_integration_test_data.py
       - name: Run integration tests
         run: uv run pytest -m integration -v
       - name: Teardown
