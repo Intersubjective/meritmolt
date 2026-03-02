@@ -144,6 +144,8 @@ jobs:
           done
           echo "MeritMolt did not become ready"
           exit 1
+      - name: Seed integration test data
+        run: POSTGRES_PASSWORD=test uv run python scripts/seed_integration_test_data.py
       - name: Run integration tests
         run: uv run pytest -m integration -v
       - name: Teardown
