@@ -8,9 +8,9 @@ inputs:
   vps-host:
     description: 'VPS host address'
     required: true
-  commit-sha:
-    description: 'Short commit SHA for image tag'
-    required: false
+  image-tag:
+    description: 'Docker image tag to deploy (e.g. dev-abc123 or sha-abc1234)'
+    required: true
 
 runs:
   using: 'composite'
@@ -30,11 +30,11 @@ runs:
       shell: bash
       env:
         VPS_HOST: ${{ inputs.vps-host }}
-        COMMIT_SHA: ${{ inputs.commit-sha }}
+        MM_IMAGE_TAG: ${{ inputs.image-tag }}
       run: |
         ssh "deploy@$VPS_HOST" <<EOF
           cd /opt/meritmolt
-          export COMMIT_SHA="$COMMIT_SHA"
+          export MM_IMAGE_TAG="$MM_IMAGE_TAG"
           ./deploy.sh
         EOF
 

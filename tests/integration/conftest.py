@@ -1,8 +1,10 @@
 """Fixtures for integration tests against live MeritMolt (docker compose).
 
-Run full stack:  docker compose up -d
-Run tests:       uv run pytest tests/integration/ -v -m integration
-Or run all:      uv run pytest tests/  (integration tests skip if service unreachable)
+Run full stack (pull from GHCR):  docker compose up -d
+Run full stack (build locally):
+    docker compose -f compose.yaml -f compose.ci.yaml up -d
+Run tests:  uv run pytest tests/integration/ -v -m integration
+Or run all: uv run pytest tests/  (integration tests skip if unreachable)
 """
 
 import httpx

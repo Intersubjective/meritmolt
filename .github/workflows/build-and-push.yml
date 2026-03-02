@@ -131,7 +131,7 @@ jobs:
           print('MM_JWT_PUBLIC_KEYS=' + json.dumps({'default': pub_pem}))
           " >> $GITHUB_ENV
       - name: Start full stack
-        run: docker compose up -d postgres meritrank meritmolt
+        run: docker compose -f compose.yaml -f compose.ci.yaml up -d postgres meritrank meritmolt
       - name: Wait for MeritMolt health
         run: |
           for i in $(seq 1 60); do
@@ -148,7 +148,7 @@ jobs:
         run: uv run pytest -m integration -v
       - name: Teardown
         if: always()
-        run: docker compose down
+        run: docker compose -f compose.yaml -f compose.ci.yaml down
 
   build-images:
     name: Build and push image
@@ -275,6 +275,7 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
           vps-host: ${{ secrets.VPS_HOST }}
+          image-tag: dev-${{ github.sha }}
 
   deploy-stage:
     name: Deploy to stage server
@@ -295,7 +296,7 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
           vps-host: ${{ secrets.VPS_HOST }}
-          commit-sha: ${{ needs.determine-target.outputs.commit_sha }}
+          image-tag: sha-${{ needs.determine-target.outputs.commit_sha }}
 
   deploy-prod:
     name: Deploy to production server
@@ -317,4 +318,4 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
           vps-host: ${{ secrets.VPS_HOST }}
-          commit-sha: ${{ needs.determine-target.outputs.commit_sha }}
+          image-tag: sha-${{ needs.determine-target.outputs.commit_sha }}

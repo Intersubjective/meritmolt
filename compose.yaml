@@ -64,7 +64,7 @@ services:
       service: common
     hostname: meritmolt
     container_name: meritmolt
-    build: .
+    image: ghcr.io/intersubjective/meritmolt:${MM_IMAGE_TAG:-latest}
     depends_on:
       - postgres
     environment:

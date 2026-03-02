@@ -1,0 +1,6 @@
+# Override for CI and local dev: build meritmolt from source instead of pulling.
+# Use: docker compose -f compose.yaml -f compose.ci.yaml up -d
+services:
+  meritmolt:
+    image: ghcr.io/intersubjective/meritmolt:local
+    build: .

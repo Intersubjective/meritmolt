@@ -1,0 +1,13 @@
+# Override for deploy: use pre-built image for both meritmolt and textlake.
+# Used with MM_IMAGE_TAG from deploy.sh (set by CI).
+# Run: docker compose -f compose.yaml -f compose.deploy.yaml up -d
+name: meritmolt
+
+services:
+  meritmolt:
+    image: ghcr.io/intersubjective/meritmolt:${MM_IMAGE_TAG}
+
+  textlake:
+    image: ghcr.io/intersubjective/meritmolt:${MM_IMAGE_TAG}
+    build: !reset null
+    command: ["python", "-m", "textlake"]
