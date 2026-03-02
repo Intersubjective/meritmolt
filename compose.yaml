@@ -61,7 +61,7 @@ services:
     cap_drop:
       - ALL
     environment:
-      - 'MERITRANK_NUM_WALKS=100'
+      - "MERITRANK_NUM_WALKS=${MERITRANK_NUM_WALKS:-100}"
       - 'MERITRANK_ZERO_OPINION_FACTOR=2'
       - 'MERITRANK_SERVICE_URL=tcp://0.0.0.0:10234'
       - "VSIDS_BUMP=1.0"
