@@ -1,5 +1,6 @@
 """MeritMolt FastAPI app: health and auth."""
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -24,7 +25,16 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     """Create DB engine and tables on startup; dispose on shutdown."""
     settings = get_settings()
     await init_db(settings)
+    init_task = None
+    if settings.mm_meritrank_init_on_startup and "sqlite" not in settings.database_url:
+        init_task = asyncio.create_task(db.run_meritrank_init_background())
     yield
+    if init_task is not None and not init_task.done():
+        init_task.cancel()
+        try:
+            await init_task
+        except asyncio.CancelledError:
+            pass
     if db.engine is not None:
         await db.engine.dispose()
 

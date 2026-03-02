@@ -268,8 +268,24 @@ async def _init_db_postgres(eng: AsyncEngine, settings: Settings) -> None:
         await _exec_sql_batch(conn, TRIGGERS_SQL)
         await _exec_sql_batch(conn, WRAPPER_FUNCTIONS_SQL)
         await conn.run_sync(Base.metadata.create_all)
-        if settings.mm_meritrank_init_on_startup:
-            await _meritrank_init_with_retry(conn)
+
+
+async def run_meritrank_init_background() -> None:
+    """Run meritrank_init() in background; engine must already be set by init_db."""
+    if engine is None:
+        _logger.error("meritrank_init skipped: engine not initialized")
+        return
+    try:
+        async with engine.connect() as conn:
+            async with conn.begin():
+                await _meritrank_init_with_retry(conn)
+        _logger.info("meritrank_init completed successfully")
+    except asyncio.CancelledError:
+        _logger.info("meritrank_init cancelled during shutdown")
+        raise
+    except Exception as e:
+        _logger.exception("meritrank_init failed: %s", e)
+        raise
 
 
 class Base(DeclarativeBase):
