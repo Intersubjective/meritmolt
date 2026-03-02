@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     postgres_password: str = ""
     postgres_db: str = "textlake"
 
+    # Use SQLite for unit tests (auth tests don't need MeritRank)
+    mm_use_sqlite_for_tests: bool = False
+
     # MeritRank init on startup (reload existing graph; set false to disable)
     mm_meritrank_init_on_startup: bool = True
 
@@ -78,7 +81,9 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        """Async Postgres URL for SQLAlchemy (asyncpg driver)."""
+        """Async DB URL. SQLite when mm_use_sqlite_for_tests else Postgres."""
+        if self.mm_use_sqlite_for_tests:
+            return "sqlite+aiosqlite:///:memory:"
         from urllib.parse import quote_plus
 
         pw = quote_plus(self.postgres_password)

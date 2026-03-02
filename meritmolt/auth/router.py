@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, Request
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from meritmolt.auth.dependencies import get_current_agent, get_db_session
@@ -60,8 +61,9 @@ async def login(
     settings = get_settings()
     mb_info = await verify_identity(identity_token, settings)
 
-    # Upsert mm_agents
-    stmt = pg_insert(MmAgent).values(
+    # Upsert mm_agents (dialect-specific insert for Postgres and SQLite)
+    insert_cls = sqlite_insert if "sqlite" in settings.database_url else pg_insert
+    stmt = insert_cls(MmAgent).values(
         mb_agent_id=mb_info.agent_id,
         mb_name=mb_info.name,
     )

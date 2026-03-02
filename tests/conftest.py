@@ -8,6 +8,13 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 
+def pytest_configure(config: pytest.Config) -> None:
+    """Set MM_USE_SQLITE_FOR_TESTS for unit tests (auth tests don't need MeritRank)."""
+    markexpr = getattr(config.option, "markexpr", None)
+    if markexpr == "not integration":
+        os.environ.setdefault("MM_USE_SQLITE_FOR_TESTS", "1")
+
+
 def _generate_es256_keypair() -> tuple[str, str]:
     """Return (private_pem, public_pem) for ES256."""
     private_key = ec.generate_private_key(ec.SECP256R1())
@@ -54,3 +61,14 @@ def _env_and_cache() -> None:
     _clear_settings_cache()
     yield
     _clear_settings_cache()
+
+
+@pytest.fixture(scope="session")
+def client():
+    """TestClient with proper lifespan (required for DB init)."""
+    from fastapi.testclient import TestClient
+
+    from meritmolt.main import app
+
+    with TestClient(app) as c:
+        yield c

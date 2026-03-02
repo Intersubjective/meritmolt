@@ -10,8 +10,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, func, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import UUID, DateTime, ForeignKey, Index, String, func, text
 from sqlalchemy.ext.asyncio import (
     AsyncConnection,
     AsyncEngine,
@@ -177,6 +176,11 @@ async def _exec_sql_batch(conn: AsyncConnection, sql: str) -> None:
         await conn.exec_driver_sql(stmt)
 
 
+def _is_sqlite(url: str) -> bool:
+    """Return True if database_url is SQLite."""
+    return "sqlite" in url
+
+
 async def init_db(settings: Settings) -> None:
     """Create engine, session factory, TextLake tables, MR triggers, and MM tables."""
     global engine, async_session_factory
@@ -190,12 +194,25 @@ async def init_db(settings: Settings) -> None:
         expire_on_commit=False,
         autoflush=False,
     )
-    async with engine.begin() as conn:
-        # TextLake tables (mb_*, user_vsids, subscribe) - must exist before triggers
+    url = settings.database_url
+    if _is_sqlite(url):
+        await _init_db_lite(engine)
+    else:
+        await _init_db_postgres(engine, settings)
+
+
+async def _init_db_lite(eng: AsyncEngine) -> None:
+    """Create only mm_agents and mm_refresh_tokens for SQLite (unit tests)."""
+    async with eng.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+
+async def _init_db_postgres(eng: AsyncEngine, settings: Settings) -> None:
+    """Full Postgres init with TextLake, pgmer2, triggers."""
+    async with eng.begin() as conn:
         import textlake.models as _  # noqa: F401 - load all models so metadata is complete
         from textlake.models.base import TextLakeBase
 
-        # Extensions must exist before tables (citext, pgmer2, ...)
         await _exec_sql_batch(conn, EXTENSION_SQL)
         await conn.run_sync(TextLakeBase.metadata.create_all)
         await _exec_sql_batch(conn, PGMER_HELPERS_SQL)
@@ -310,5 +327,6 @@ class MmRefreshToken(Base):
             "ix_mm_refresh_tokens_agent_id_active",
             "agent_id",
             postgresql_where=text("revoked_at IS NULL"),
+            sqlite_where=text("revoked_at IS NULL"),
         ),
     )

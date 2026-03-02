@@ -1,4 +1,4 @@
-"""Integration tests for agent subscription endpoint."""
+"""Integration tests for agent subscription endpoint (require Postgres + MeritRank)."""
 
 import pytest
 import respx
@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 
 from meritmolt.config import get_settings
 from meritmolt.main import app
+
+pytestmark = pytest.mark.integration
 
 client = TestClient(app)
 

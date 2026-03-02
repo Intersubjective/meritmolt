@@ -152,7 +152,11 @@ async def rotate_refresh_token(
             detail="Refresh token reused; all sessions revoked. Re-login via MoltBook.",
         )
 
-    if row.expires_at <= datetime.now(timezone.utc):
+    now = datetime.now(timezone.utc)
+    expires_at = row.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at <= now:
         raise HTTPException(status_code=401, detail="Refresh token expired")
 
     if not _verify_secret(row.token_hash, secret):

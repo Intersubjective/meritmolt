@@ -1,17 +1,15 @@
-"""Integration tests for auth endpoints (login, refresh, logout, me)."""
+"""Auth endpoint tests (login, refresh, logout, me). Use SQLite for unit runs."""
+
+from __future__ import annotations
 
 import pytest
 import respx
-from fastapi.testclient import TestClient
 
 from meritmolt.config import get_settings
-from meritmolt.main import app
-
-client = TestClient(app)
 
 
 @respx.mock
-def test_login_returns_tokens_when_mb_verifies() -> None:
+def test_login_returns_tokens_when_mb_verifies(client) -> None:
     """Login with valid identity and mocked MB returns access + refresh."""
     settings = get_settings()
     url = f"{settings.mm_moltbook_api_base.rstrip('/')}/agents/verify-identity"
@@ -26,7 +24,9 @@ def test_login_returns_tokens_when_mb_verifies() -> None:
         headers={"X-Moltbook-Identity": "fake-mb-token"},
     )
     if response.status_code != 200:
-        pytest.skip(f"DB likely unavailable: {response.status_code} {response.text}")
+        pytest.skip(
+            f"DB likely unavailable: {response.status_code} {response.text[:200]}"
+        )
     data = response.json()
     assert "access_token" in data
     assert "refresh_token" in data
@@ -35,14 +35,14 @@ def test_login_returns_tokens_when_mb_verifies() -> None:
 
 
 @respx.mock
-def test_login_401_when_identity_missing() -> None:
+def test_login_401_when_identity_missing(client) -> None:
     """POST /v1/auth/login without X-Moltbook-Identity returns 401."""
     response = client.post("/v1/auth/login")
     assert response.status_code == 401
 
 
 @respx.mock
-def test_login_401_when_mb_rejects() -> None:
+def test_login_401_when_mb_rejects(client) -> None:
     """POST /v1/auth/login when MB returns 401 returns 401 (or 503 if DB down)."""
     settings = get_settings()
     url = f"{settings.mm_moltbook_api_base.rstrip('/')}/agents/verify-identity"
@@ -58,7 +58,7 @@ def test_login_401_when_mb_rejects() -> None:
 
 
 @respx.mock
-def test_me_401_without_bearer() -> None:
+def test_me_401_without_bearer(client) -> None:
     """GET /v1/auth/me without Authorization returns 401 (or 503 if DB down)."""
     response = client.get("/v1/auth/me")
     if response.status_code == 503:
@@ -67,7 +67,7 @@ def test_me_401_without_bearer() -> None:
 
 
 @respx.mock
-def test_me_returns_agent_when_valid_jwt() -> None:
+def test_me_returns_agent_when_valid_jwt(client) -> None:
     """GET /v1/auth/me with valid JWT returns agent info."""
     settings = get_settings()
     url = f"{settings.mm_moltbook_api_base.rstrip('/')}/agents/verify-identity"
@@ -94,7 +94,7 @@ def test_me_returns_agent_when_valid_jwt() -> None:
 
 
 @respx.mock
-def test_refresh_returns_new_tokens() -> None:
+def test_refresh_returns_new_tokens(client) -> None:
     """POST /v1/auth/refresh with valid refresh token returns new access + refresh."""
     settings = get_settings()
     url = f"{settings.mm_moltbook_api_base.rstrip('/')}/agents/verify-identity"
@@ -123,7 +123,7 @@ def test_refresh_returns_new_tokens() -> None:
 
 
 @respx.mock
-def test_logout_204() -> None:
+def test_logout_204(client) -> None:
     """POST /v1/auth/logout with refresh token returns 204."""
     settings = get_settings()
     url = f"{settings.mm_moltbook_api_base.rstrip('/')}/agents/verify-identity"

@@ -1,0 +1,320 @@
+name: Build and Deploy Images
+
+# Each GitHub environment (dev, stage, prod) must provide secrets:
+# - VPS_HOST
+# - VPS_SSH_KEY
+
+on:
+  push:
+    branches:
+      - main
+      - release
+  pull_request:
+    branches:
+      - main
+      - release
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  determine-target:
+    name: Select deployment target
+    runs-on: ubuntu-latest
+    outputs:
+      build_type: ${{ steps.target.outputs.build_type }}
+      run_dev_deploy: ${{ steps.target.outputs.run_dev_deploy }}
+      run_stage_deploy: ${{ steps.target.outputs.run_stage_deploy }}
+      run_prod_deploy: ${{ steps.target.outputs.run_prod_deploy }}
+      version: ${{ steps.versions.outputs.version }}
+      commit_sha: ${{ steps.sha.outputs.short_sha }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: target
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            {
+              echo "build_type=dev"
+              echo "run_dev_deploy=true"
+              echo "run_stage_deploy=false"
+              echo "run_prod_deploy=false"
+            } >> "$GITHUB_OUTPUT"
+          elif [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == "refs/heads/release" ]]; then
+            {
+              echo "build_type=release"
+              echo "run_dev_deploy=false"
+              echo "run_stage_deploy=true"
+              echo "run_prod_deploy=true"
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "build_type="
+              echo "run_dev_deploy=false"
+              echo "run_stage_deploy=false"
+              echo "run_prod_deploy=false"
+            } >> "$GITHUB_OUTPUT"
+          fi
+      - id: versions
+        if: steps.target.outputs.build_type != ''
+        run: |
+          VERSION=$(grep -E '^version\s*=' pyproject.toml | head -1 | sed -n 's/.*"\([^"]*\)".*/\1/p')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+      - id: sha
+        if: steps.target.outputs.build_type != ''
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          echo "Short SHA: $SHORT_SHA"
+
+  test-unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      CI: "true"
+      MM_USE_SQLITE_FOR_TESTS: "1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - name: Install dependencies
+        run: uv sync --extra dev
+      - name: Run unit tests
+        run: uv run pytest -m "not integration" -v
+
+  test-integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      CI: "true"
+      POSTGRES_PASSWORD: test
+      MM_MOLTBOOK_APP_KEY: test-app-key
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+      - name: Install dependencies
+        run: uv sync --extra dev
+      - name: Generate test JWT keys
+        run: |
+          uv run python -c "
+          from cryptography.hazmat.primitives.asymmetric import ec
+          from cryptography.hazmat.primitives import serialization
+          import json
+          pk = ec.generate_private_key(ec.SECP256R1())
+          pub = pk.public_key()
+          priv_pem = pk.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode()
+          pub_pem = pub.public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo).decode()
+          print('MM_JWT_PRIVATE_KEYS=' + json.dumps({'default': priv_pem}))
+          print('MM_JWT_PUBLIC_KEYS=' + json.dumps({'default': pub_pem}))
+          " >> $GITHUB_ENV
+      - name: Start full stack
+        run: docker compose up -d postgres meritrank meritmolt
+      - name: Wait for MeritMolt health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8000/health > /dev/null; then
+              echo "MeritMolt is ready"
+              exit 0
+            fi
+            echo "Waiting for MeritMolt... ($i/60)"
+            sleep 2
+          done
+          echo "MeritMolt did not become ready"
+          exit 1
+      - name: Run integration tests
+        run: uv run pytest -m integration -v
+      - name: Teardown
+        if: always()
+        run: docker compose down
+
+  build-images:
+    name: Build and push image
+    runs-on: ubuntu-latest
+    needs:
+      - determine-target
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Generate tag values
+        id: tags
+        run: |
+          BUILD_TYPE="${{ needs.determine-target.outputs.build_type }}"
+          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+          SHORT_SHA="${{ needs.determine-target.outputs.commit_sha }}"
+
+          echo "image_name=${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+          if [[ "${{ github.event_name }}" == "push" && "$BUILD_TYPE" != "" ]]; then
+            if [ "$BUILD_TYPE" = "dev" ]; then
+              TAG1="dev-${{ github.sha }}"
+              TAG2="dev-latest"
+              TAGS_MULTILINE="type=raw,value=${TAG1}"$'\n'"type=raw,value=${TAG2}"
+            else
+              VERSION="${{ needs.determine-target.outputs.version }}"
+              SHA_TAG="sha-${SHORT_SHA}"
+              TAGS_MULTILINE="type=raw,value=v${VERSION}"$'\n'"type=raw,value=latest"$'\n'"type=raw,value=${SHA_TAG}"$'\n'"type=sha"
+            fi
+
+            {
+              echo "tags<<EOF"
+              echo "$TAGS_MULTILINE"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            echo "Generated tags:"
+            echo "$TAGS_MULTILINE"
+          else
+            echo "Skipping tag generation for PR or non-deployment build"
+          fi
+      - name: Prepare image metadata
+        if: github.event_name == 'push' && needs.determine-target.outputs.build_type != ''
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.tags.outputs.image_name }}
+          tags: ${{ steps.tags.outputs.tags }}
+      - name: Build Docker image
+        if: ${{ !(github.event_name == 'push' && needs.determine-target.outputs.build_type != '') }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          cache-from: type=gha,scope=meritmolt
+
+      - name: Build Docker image (export cache)
+        if: ${{ github.event_name == 'push' && needs.determine-target.outputs.build_type != '' }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=meritmolt
+          cache-to: type=gha,mode=min,scope=meritmolt
+      - name: Image summary
+        if: github.event_name == 'push' && needs.determine-target.outputs.build_type != ''
+        run: |
+          BUILD_TYPE="${{ needs.determine-target.outputs.build_type }}"
+          IMAGE_NAME="${{ steps.tags.outputs.image_name }}"
+
+          echo "### Image published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "$BUILD_TYPE" = "dev" ]; then
+            echo "**Context:** main branch" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Images:**" >> $GITHUB_STEP_SUMMARY
+            echo "- \`${IMAGE_NAME}:dev-${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- \`${IMAGE_NAME}:dev-latest\`" >> $GITHUB_STEP_SUMMARY
+          else
+            VERSION="${{ needs.determine-target.outputs.version }}"
+            SHORT_SHA="${{ needs.determine-target.outputs.commit_sha }}"
+            echo "**Version:** v${VERSION}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Images:**" >> $GITHUB_STEP_SUMMARY
+            echo "- \`${IMAGE_NAME}:v${VERSION}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- \`${IMAGE_NAME}:latest\`" >> $GITHUB_STEP_SUMMARY
+            echo "- \`${IMAGE_NAME}:sha-${SHORT_SHA}\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  deploy-dev:
+    name: Deploy to dev server
+    runs-on: ubuntu-latest
+    needs:
+      - determine-target
+      - test-unit
+      - test-integration
+      - build-images
+    if: needs.determine-target.outputs.run_dev_deploy == 'true'
+    environment:
+      name: dev
+    concurrency:
+      group: deploy-dev
+      cancel-in-progress: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Deploy
+        uses: ./.github/actions/deploy
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+          vps-host: ${{ secrets.VPS_HOST }}
+
+  deploy-stage:
+    name: Deploy to stage server
+    runs-on: ubuntu-latest
+    needs:
+      - determine-target
+      - test-unit
+      - test-integration
+      - build-images
+    if: needs.determine-target.outputs.run_stage_deploy == 'true'
+    environment:
+      name: stage
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Deploy
+        uses: ./.github/actions/deploy
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+          vps-host: ${{ secrets.VPS_HOST }}
+          commit-sha: ${{ needs.determine-target.outputs.commit_sha }}
+
+  deploy-prod:
+    name: Deploy to production server
+    runs-on: ubuntu-latest
+    needs:
+      - determine-target
+      - test-unit
+      - test-integration
+      - build-images
+      - deploy-stage
+    if: needs.determine-target.outputs.run_prod_deploy == 'true'
+    environment:
+      name: prod
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Deploy
+        uses: ./.github/actions/deploy
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+          vps-host: ${{ secrets.VPS_HOST }}
+          commit-sha: ${{ needs.determine-target.outputs.commit_sha }}

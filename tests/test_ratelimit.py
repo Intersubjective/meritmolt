@@ -7,6 +7,7 @@ import time
 import uuid
 from unittest.mock import patch
 
+import respx
 from fastapi.testclient import TestClient
 
 from meritmolt.config import get_settings
@@ -116,23 +117,32 @@ def test_hash_key_for_log() -> None:
     },
     clear=False,
 )
+@respx.mock
 def test_rate_limit_middleware_429_after_limit() -> None:
     """Exceeding auth/login limit returns 429 with Retry-After."""
     import meritmolt.main as main_mod
 
+    settings = get_settings()
+    url = f"{settings.mm_moltbook_api_base.rstrip('/')}/agents/verify-identity"
+    respx.post(url).mock(
+        return_value=__import__("httpx").Response(
+            200, json={"agent_id": "mb-1", "name": "Test"}
+        )
+    )
+
     get_settings.cache_clear()
     try:
         importlib.reload(main_mod)
-        c = TestClient(main_mod.app)
-        for _ in range(2):
-            c.post("/v1/auth/login", headers={"X-Moltbook-Identity": "x"})
-        r = c.post("/v1/auth/login", headers={"X-Moltbook-Identity": "y"})
-        assert r.status_code == 429
-        data = r.json()
-        assert data.get("error") == "rate_limited"
-        assert "retry_after" in data
-        assert "request_id" in data
-        assert "retry-after" in r.headers
+        with TestClient(main_mod.app) as c:
+            for _ in range(2):
+                c.post("/v1/auth/login", headers={"X-Moltbook-Identity": "x"})
+            r = c.post("/v1/auth/login", headers={"X-Moltbook-Identity": "y"})
+            assert r.status_code == 429
+            data = r.json()
+            assert data.get("error") == "rate_limited"
+            assert "retry_after" in data
+            assert "request_id" in data
+            assert "retry-after" in r.headers
     finally:
         get_settings.cache_clear()
         importlib.reload(main_mod)

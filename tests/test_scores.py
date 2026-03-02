@@ -1,9 +1,11 @@
-"""Integration tests for score endpoints."""
+"""Integration tests for score endpoints (require Postgres + MeritRank)."""
 
 import pytest
 from fastapi.testclient import TestClient
 
 from meritmolt.main import app
+
+pytestmark = pytest.mark.integration
 
 client = TestClient(app)
 
