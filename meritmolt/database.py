@@ -7,10 +7,13 @@ wheel; this cross-package dependency is intentional.
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import UUID, DateTime, ForeignKey, Index, String, func, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import (
     AsyncConnection,
     AsyncEngine,
@@ -33,6 +36,14 @@ from meritmolt.schema.ddl import (
 # Set by init_db(); used by get_db_session
 engine: AsyncEngine | None = None
 async_session_factory: async_sessionmaker[AsyncSession] | None = None
+
+# meritrank_init retry: MeritRank service may not be ready at startup
+_MERITRANK_INIT_MAX_RETRIES = 5
+_MERITRANK_INIT_INITIAL_DELAY_SEC = 1.0
+_MERITRANK_INIT_MAX_DELAY_SEC = 30.0
+_MERITRANK_INIT_RETRYABLE_MESSAGE = "Try again"
+
+_logger = logging.getLogger(__name__)
 
 
 def _split_sql_statements(sql: str) -> list[str]:
@@ -207,6 +218,42 @@ async def _init_db_lite(eng: AsyncEngine) -> None:
         await conn.run_sync(Base.metadata.create_all)
 
 
+def _is_meritrank_retryable(exc: BaseException) -> bool:
+    """True if meritrank_init failed with a transient 'Try again' error."""
+    msg = str(exc)
+    if _MERITRANK_INIT_RETRYABLE_MESSAGE in msg:
+        return True
+    cause = getattr(exc, "__cause__", None)
+    if cause is not None:
+        return _MERITRANK_INIT_RETRYABLE_MESSAGE in str(cause)
+    return False
+
+
+async def _meritrank_init_with_retry(conn: AsyncConnection) -> None:
+    """Run meritrank_init() with retries; MeritRank may not be ready at startup."""
+    delay = _MERITRANK_INIT_INITIAL_DELAY_SEC
+    for attempt in range(_MERITRANK_INIT_MAX_RETRIES):
+        try:
+            await conn.execute(text("SELECT meritrank_init()"))
+            return
+        except DBAPIError as e:
+            if (
+                not _is_meritrank_retryable(e)
+                or attempt == _MERITRANK_INIT_MAX_RETRIES - 1
+            ):
+                raise
+            _logger.warning(
+                "meritrank_init attempt %d/%d failed (MeritRank not ready): %s. "
+                "Retrying in %.1fs.",
+                attempt + 1,
+                _MERITRANK_INIT_MAX_RETRIES,
+                e,
+                delay,
+            )
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, _MERITRANK_INIT_MAX_DELAY_SEC)
+
+
 async def _init_db_postgres(eng: AsyncEngine, settings: Settings) -> None:
     """Full Postgres init with TextLake, pgmer2, triggers."""
     async with eng.begin() as conn:
@@ -222,7 +269,7 @@ async def _init_db_postgres(eng: AsyncEngine, settings: Settings) -> None:
         await _exec_sql_batch(conn, WRAPPER_FUNCTIONS_SQL)
         await conn.run_sync(Base.metadata.create_all)
         if settings.mm_meritrank_init_on_startup:
-            await conn.execute(text("SELECT meritrank_init()"))
+            await _meritrank_init_with_retry(conn)
 
 
 class Base(DeclarativeBase):
