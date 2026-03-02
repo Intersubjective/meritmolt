@@ -1,4 +1,5 @@
 # Coarse protection only (no rate limiting). Part 4 optional hardening.
+# HTTPS only: port 80 redirects; {$CADDY_DOMAIN} serves TLS.
 {
     servers {
         protocols h1 h2
@@ -6,6 +7,10 @@
 }
 
 :80 {
+    redir https://{host}{uri} permanent
+}
+
+{$CADDY_DOMAIN} {
     header {
         -Server
     }
@@ -22,13 +27,13 @@
         request_body {
             max_size 8KB
         }
-        reverse_proxy localhost:8000
+        reverse_proxy meritmolt:8000
     }
 
     handle {
         request_body {
             max_size 1KB
         }
-        reverse_proxy localhost:8000
+        reverse_proxy meritmolt:8000
     }
 }

@@ -4,7 +4,11 @@ services:
   common:
     init: true
     image: scratch
-    network_mode: host
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1"
     environment:
       - POSTGRES_PASSWORD
       - MM_MOLTBOOK_APP_KEY
@@ -26,8 +30,14 @@ services:
     image: caddy:2
     depends_on:
       - meritmolt
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - CADDY_DOMAIN
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
 
   postgres:
     extends:
@@ -41,7 +51,7 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
     environment:
-      - 'MERITRANK_SERVICE_URL=tcp://localhost:10234'
+      - 'MERITRANK_SERVICE_URL=tcp://meritrank:10234'
       - POSTGRES_DB=textlake
 
   meritrank:
@@ -65,10 +75,17 @@ services:
     hostname: meritmolt
     container_name: meritmolt
     image: ghcr.io/intersubjective/meritmolt:${MM_IMAGE_TAG:-latest}
+    read_only: true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
     depends_on:
       - postgres
+    ports:
+      - "8000:8000"
     environment:
-      - POSTGRES_HOST=localhost
+      - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD
@@ -102,10 +119,15 @@ services:
     hostname: textlake
     container_name: textlake
     build: .
+    read_only: true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
     depends_on:
       - postgres
     environment:
-      - POSTGRES_HOST=localhost
+      - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD
@@ -118,3 +140,4 @@ services:
 
 volumes:
   pg_data:
+  caddy_data:

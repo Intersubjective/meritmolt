@@ -148,7 +148,7 @@ jobs:
         run: |
           docker compose -f compose.yaml -f compose.ci.yaml run --rm \
             -v ${{ github.workspace }}/scripts:/app/scripts:ro \
-            -e POSTGRES_HOST=localhost \
+            -e POSTGRES_HOST=postgres \
             -e POSTGRES_PORT=5432 \
             -e POSTGRES_USER=postgres \
             -e POSTGRES_PASSWORD=test \

@@ -4,6 +4,10 @@
 name: meritmolt
 
 services:
+  meritrank:
+    environment:
+      - "RUST_BACKTRACE=0"
+
   meritmolt:
     image: ghcr.io/intersubjective/meritmolt:${MM_IMAGE_TAG}
 

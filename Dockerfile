@@ -35,5 +35,9 @@ COPY --from=builder /app/pyproject.toml /app/pyproject.toml
 ENV PATH="/app/.venv/bin:$PATH"
 ENV VIRTUAL_ENV="/app/.venv"
 
+RUN adduser --disabled-password --gecos '' appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 # Default for meritmolt service; textlake overrides in compose
 CMD ["python", "-m", "uvicorn", "meritmolt.main:app", "--host", "0.0.0.0", "--port", "8000"]
