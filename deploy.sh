@@ -8,8 +8,15 @@ cd "$(dirname "$0")"
 if [ -n "${MM_IMAGE_TAG:-}" ]; then
   echo "[deploy] Using image tag: ${MM_IMAGE_TAG}"
 else
-  echo "[deploy] No MM_IMAGE_TAG provided, using latest (fallback)"
-  export MM_IMAGE_TAG=latest
+  if [ "${MM_DEV_SERVER:-}" = "1" ]; then
+    echo "[deploy] No MM_IMAGE_TAG provided, using dev-latest (fallback for dev server)"
+    export MM_IMAGE_TAG=dev-latest
+  else
+    echo "[deploy] ERROR: MM_IMAGE_TAG is required for non-dev deploys." >&2
+    echo "[deploy] Set MM_IMAGE_TAG to the desired image tag (e.g. sha-abc1234) and re-run." >&2
+    echo "[deploy] Or set MM_DEV_SERVER=1 to allow dev-latest fallback." >&2
+    exit 1
+  fi
 fi
 
 echo "[deploy] Pulling images..."
