@@ -40,9 +40,16 @@ async def verify_identity(identity_token: str, settings: Settings) -> MBAgentInf
     Call MoltBook verify-identity; return agent info or raise.
 
     Raises:
-        fastapi.HTTPException: 401 if token invalid, 502 on MB failure.
+        fastapi.HTTPException: 401 if token invalid, 502 on MB failure,
+        503 if not configured.
     """
     from fastapi import HTTPException
+
+    if not settings.mm_moltbook_app_key:
+        raise HTTPException(
+            status_code=503,
+            detail="MoltBook not configured (MM_MOLTBOOK_APP_KEY missing)",
+        )
 
     url = f"{settings.mm_moltbook_api_base.rstrip('/')}/agents/verify-identity"
     headers = {"X-Moltbook-App-Key": settings.mm_moltbook_app_key}

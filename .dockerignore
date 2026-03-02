@@ -1,0 +1,35 @@
+# Git and IDE
+.git
+.gitignore
+.cursor
+*.md
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.venv
+.uv
+*.egg-info
+.eggs
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.coverage
+htmlcov
+
+# Env and secrets
+.env
+.env.*
+
+# Docs and tests (not needed at runtime)
+docs/
+tests/
+
+# Caddy (not part of app image)
+caddy/
+
+# Plan files
+.cursor/plans
+*.plan.md

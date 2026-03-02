@@ -27,8 +27,8 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # MoltBook
-    mm_moltbook_app_key: str
+    # MoltBook (optional; if unset, login returns 503)
+    mm_moltbook_app_key: str | None = None
     mm_moltbook_api_base: str = "https://www.moltbook.com/api/v1"
 
     # JWT (JSON dict kid -> PEM string)
@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     postgres_user: str = "postgres"
     postgres_password: str = ""
     postgres_db: str = "textlake"
+
+    # MeritRank init on startup (reload existing graph; set false to disable)
+    mm_meritrank_init_on_startup: bool = True
 
     # Rate limiting
     mm_rl_auth_login_limit: int = 30  # per hour, IP-keyed
@@ -89,4 +92,4 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Return cached settings instance."""
-    return Settings()  # type: ignore[call-arg]
+    return Settings()

@@ -16,6 +16,7 @@ services:
       - MM_REFRESH_MAX_ACTIVE_PER_AGENT
       - MM_HTTP_TIMEOUT_SECONDS
       - MM_HTTP_RETRY_MAX_ATTEMPTS
+      - MM_MERITRANK_INIT_ON_STARTUP
 
   caddy:
     extends:
@@ -34,25 +35,29 @@ services:
     hostname: postgres
     container_name: postgres
     # Image provides MeritMolt schema (pgmer2 extension); image name is legacy.
-    image: vbulavintsev/postgres-tentura
+    image: vbulavintsev/postgres-tentura:v0.3.26
     depends_on:
       - meritrank
     volumes:
       - pg_data:/var/lib/postgresql/data
     environment:
       - 'MERITRANK_SERVICE_URL=tcp://localhost:10234'
+      - POSTGRES_DB=textlake
 
   meritrank:
     extends:
       service: common
     hostname: meritrank
     container_name: meritrank
-    image: vbulavintsev/meritrank-service
+    image: vbulavintsev/meritrank-service:v0.2.59
     read_only: true
     environment:
-      - 'MERITRANK_NUM_WALK=5000'
+      - 'MERITRANK_NUM_WALKS=100'
       - 'MERITRANK_ZERO_OPINION_FACTOR=2'
       - 'MERITRANK_SERVICE_URL=tcp://0.0.0.0:10234'
+      - "VSIDS_BUMP=1.0"
+      - "RUST_BACKTRACE=full"
+      - "MERITRANK_OMIT_NEG_EDGES_SCORES=true"
 
   meritmolt:
     extends:
@@ -91,11 +96,11 @@ services:
       - MM_BP_AUTH_MAX_CONCURRENT
       - MM_BP_REQUEST_DEADLINE_SECONDS
 
-  moltbook-crawler:
+  textlake:
     extends:
       service: common
-    hostname: moltbook-crawler
-    container_name: moltbook-crawler
+    hostname: textlake
+    container_name: textlake
     build: .
     depends_on:
       - postgres
@@ -109,7 +114,7 @@ services:
       - MB_API_BASE=https://www.moltbook.com/api/v1
       - MB_RATE_LIMIT_RPM=100
       - MB_CONCURRENCY=10
-    command: ["uv", "run", "python", "-m", "textlake"]
+    command: ["python", "-m", "textlake"]
 
 volumes:
   pg_data:

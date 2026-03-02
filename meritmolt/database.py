@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from sqlalchemy import DateTime, ForeignKey, Index, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
@@ -23,6 +24,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from meritmolt.config import Settings
 from meritmolt.schema.ddl import (
     EXTENSION_SQL,
+    PGMER_HELPERS_SQL,
     TRIGGER_FUNCTIONS_SQL,
     TRIGGERS_SQL,
     VIEWS_SQL,
@@ -32,6 +34,147 @@ from meritmolt.schema.ddl import (
 # Set by init_db(); used by get_db_session
 engine: AsyncEngine | None = None
 async_session_factory: async_sessionmaker[AsyncSession] | None = None
+
+
+def _split_sql_statements(sql: str) -> list[str]:
+    """Split SQL into individual statements, respecting quotes/comments/$-quotes.
+
+    asyncpg rejects sending multiple commands in a single prepared statement, so we
+    must execute DDL one statement at a time. This splitter is intentionally small
+    and dependency-free but handles common PostgreSQL constructs like $$...$$.
+    """
+
+    statements: list[str] = []
+    buf: list[str] = []
+
+    in_single = False
+    in_double = False
+    in_line_comment = False
+    in_block_comment = False
+    dollar_tag: str | None = None
+
+    i = 0
+    n = len(sql)
+    while i < n:
+        ch = sql[i]
+        nxt = sql[i + 1] if i + 1 < n else ""
+
+        if in_line_comment:
+            buf.append(ch)
+            if ch == "\n":
+                in_line_comment = False
+            i += 1
+            continue
+
+        if in_block_comment:
+            buf.append(ch)
+            if ch == "*" and nxt == "/":
+                buf.append(nxt)
+                in_block_comment = False
+                i += 2
+            else:
+                i += 1
+            continue
+
+        # Dollar-quoted blocks: $tag$ ... $tag$
+        if dollar_tag is not None:
+            if ch == "$":
+                end = i + len(dollar_tag)
+                if sql.startswith(dollar_tag, i):
+                    buf.append(dollar_tag)
+                    dollar_tag = None
+                    i = end
+                    continue
+            buf.append(ch)
+            i += 1
+            continue
+
+        if in_single:
+            buf.append(ch)
+            if ch == "'":
+                # SQL escapes quotes by doubling: ''
+                if nxt == "'":
+                    buf.append(nxt)
+                    i += 2
+                else:
+                    in_single = False
+                    i += 1
+            else:
+                i += 1
+            continue
+
+        if in_double:
+            buf.append(ch)
+            if ch == '"':
+                if nxt == '"':
+                    buf.append(nxt)
+                    i += 2
+                else:
+                    in_double = False
+                    i += 1
+            else:
+                i += 1
+            continue
+
+        # Start of comments (only when not inside any quote)
+        if ch == "-" and nxt == "-":
+            buf.append(ch)
+            buf.append(nxt)
+            in_line_comment = True
+            i += 2
+            continue
+        if ch == "/" and nxt == "*":
+            buf.append(ch)
+            buf.append(nxt)
+            in_block_comment = True
+            i += 2
+            continue
+
+        # Start of quotes
+        if ch == "'":
+            buf.append(ch)
+            in_single = True
+            i += 1
+            continue
+        if ch == '"':
+            buf.append(ch)
+            in_double = True
+            i += 1
+            continue
+
+        # Start of dollar-quote tag
+        if ch == "$":
+            j = i + 1
+            while j < n and (sql[j].isalnum() or sql[j] == "_"):
+                j += 1
+            if j < n and sql[j] == "$":
+                dollar_tag = sql[i : j + 1]
+                buf.append(dollar_tag)
+                i = j + 1
+                continue
+
+        # Statement boundary
+        if ch == ";":
+            stmt = "".join(buf).strip()
+            if stmt:
+                statements.append(stmt)
+            buf = []
+            i += 1
+            continue
+
+        buf.append(ch)
+        i += 1
+
+    tail = "".join(buf).strip()
+    if tail:
+        statements.append(tail)
+
+    return statements
+
+
+async def _exec_sql_batch(conn: AsyncConnection, sql: str) -> None:
+    for stmt in _split_sql_statements(sql):
+        await conn.exec_driver_sql(stmt)
 
 
 async def init_db(settings: Settings) -> None:
@@ -52,13 +195,17 @@ async def init_db(settings: Settings) -> None:
         import textlake.models as _  # noqa: F401 - load all models so metadata is complete
         from textlake.models.base import TextLakeBase
 
+        # Extensions must exist before tables (citext, pgmer2, ...)
+        await _exec_sql_batch(conn, EXTENSION_SQL)
         await conn.run_sync(TextLakeBase.metadata.create_all)
-        await conn.execute(text(EXTENSION_SQL))
-        await conn.execute(text(VIEWS_SQL))
-        await conn.execute(text(TRIGGER_FUNCTIONS_SQL))
-        await conn.execute(text(TRIGGERS_SQL))
-        await conn.execute(text(WRAPPER_FUNCTIONS_SQL))
+        await _exec_sql_batch(conn, PGMER_HELPERS_SQL)
+        await _exec_sql_batch(conn, VIEWS_SQL)
+        await _exec_sql_batch(conn, TRIGGER_FUNCTIONS_SQL)
+        await _exec_sql_batch(conn, TRIGGERS_SQL)
+        await _exec_sql_batch(conn, WRAPPER_FUNCTIONS_SQL)
         await conn.run_sync(Base.metadata.create_all)
+        if settings.mm_meritrank_init_on_startup:
+            await conn.execute(text("SELECT meritrank_init()"))
 
 
 class Base(DeclarativeBase):

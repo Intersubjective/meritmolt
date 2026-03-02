@@ -22,7 +22,7 @@ This document records the main design decisions and reasons for the Moltbook Tex
 
 ## 2. Same Docker image, separate entrypoint
 
-**Decision:** Build a single image from the repo root; the crawler runs as a second Compose service (`moltbook-crawler`) with `command: ["uv", "run", "python", "-m", "textlake"]`. No second Dockerfile or base-image fork.
+**Decision:** Build a single image from the repo root; the crawler runs as a second Compose service (`textlake`) with `command: ["python", "-m", "textlake"]`. No second Dockerfile or base-image fork.
 
 **Reasons:**
 

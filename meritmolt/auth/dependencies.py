@@ -9,16 +9,16 @@ from typing import Annotated
 from fastapi import Depends, Header, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from meritmolt import database as db
 from meritmolt.auth.jwt import decode_access_token
 from meritmolt.config import get_settings
-from meritmolt.database import MmAgent, async_session_factory
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """Yield an async DB session; commit on success, rollback on exception."""
-    if async_session_factory is None:
+    if db.async_session_factory is None:
         raise HTTPException(status_code=503, detail="Database not initialized")
-    async with async_session_factory() as session:
+    async with db.async_session_factory() as session:
         try:
             yield session
             await session.commit()
@@ -30,7 +30,7 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
 async def get_current_agent(
     authorization: Annotated[str | None, Header()] = None,
     session: AsyncSession = Depends(get_db_session),
-) -> MmAgent:
+) -> db.MmAgent:
     """
     Extract Bearer token, verify JWT, load agent; raise 401 on failure.
     """
@@ -51,7 +51,7 @@ async def get_current_agent(
     except ValueError, TypeError:
         raise HTTPException(status_code=401, detail="Invalid token claims") from None
 
-    agent = await session.get(MmAgent, agent_id)
+    agent = await session.get(db.MmAgent, agent_id)
     if agent is None:
         raise HTTPException(status_code=401, detail="Agent not found")
     return agent

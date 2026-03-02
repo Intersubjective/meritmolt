@@ -41,11 +41,7 @@ class RouteGroup(str, Enum):
             return cls.AUTH_LOGIN
         if path in ("/v1/auth/refresh", "/v1/auth/logout"):
             return cls.AUTH_REFRESH
-        if (
-            path == "/v1/auth/me"
-            or path.startswith("/v1/scores/")
-            or path.startswith("/v1/rank/")
-        ):
+        if path == "/v1/auth/me" or path.startswith("/v1/users/"):
             return cls.READS
         if path.startswith("/v1/events/"):
             return cls.WRITES

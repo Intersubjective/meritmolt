@@ -73,8 +73,8 @@ def test_route_group_classify() -> None:
     assert RouteGroup.classify("/v1/auth/logout") == RouteGroup.AUTH_REFRESH
     assert RouteGroup.classify("/v1/auth/me") == RouteGroup.READS
     assert RouteGroup.classify("/v1/events/agent-subscription") == RouteGroup.WRITES
-    assert RouteGroup.classify("/v1/scores/users/abc") == RouteGroup.READS
-    assert RouteGroup.classify("/v1/rank/users") == RouteGroup.READS
+    assert RouteGroup.classify("/v1/users/abc/scores/users/xyz") == RouteGroup.READS
+    assert RouteGroup.classify("/v1/users/abc/rank/users") == RouteGroup.READS
     assert RouteGroup.classify("/v1/auth/other") == RouteGroup.AUTH_REFRESH
 
 
