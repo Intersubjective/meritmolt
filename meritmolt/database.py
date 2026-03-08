@@ -37,7 +37,7 @@ from meritmolt.schema.ddl import (
 engine: AsyncEngine | None = None
 async_session_factory: async_sessionmaker[AsyncSession] | None = None
 
-# meritrank_init retry: MeritRank service may not be ready at startup
+# meritrank_bulk_init retry: MeritRank service may not be ready at startup
 _MERITRANK_INIT_MAX_RETRIES = 5
 _MERITRANK_INIT_INITIAL_DELAY_SEC = 1.0
 _MERITRANK_INIT_MAX_DELAY_SEC = 30.0
@@ -219,7 +219,7 @@ async def _init_db_lite(eng: AsyncEngine) -> None:
 
 
 def _is_meritrank_retryable(exc: BaseException) -> bool:
-    """True if meritrank_init failed with a transient 'Try again' error."""
+    """True if meritrank_bulk_init failed with a transient 'Try again' error."""
     msg = str(exc)
     if _MERITRANK_INIT_RETRYABLE_MESSAGE in msg:
         return True
@@ -230,11 +230,11 @@ def _is_meritrank_retryable(exc: BaseException) -> bool:
 
 
 async def _meritrank_init_with_retry(conn: AsyncConnection) -> None:
-    """Run meritrank_init() with retries; MeritRank may not be ready at startup."""
+    """Run meritrank_bulk_init() with retries; MeritRank may not be ready at startup."""
     delay = _MERITRANK_INIT_INITIAL_DELAY_SEC
     for attempt in range(_MERITRANK_INIT_MAX_RETRIES):
         try:
-            await conn.execute(text("SELECT meritrank_init()"))
+            await conn.execute(text("SELECT meritrank_bulk_init()"))
             return
         except DBAPIError as e:
             if (
@@ -243,7 +243,7 @@ async def _meritrank_init_with_retry(conn: AsyncConnection) -> None:
             ):
                 raise
             _logger.warning(
-                "meritrank_init attempt %d/%d failed (MeritRank not ready): %s. "
+                "meritrank_bulk_init attempt %d/%d failed (MeritRank not ready): %s. "
                 "Retrying in %.1fs.",
                 attempt + 1,
                 _MERITRANK_INIT_MAX_RETRIES,
@@ -271,20 +271,20 @@ async def _init_db_postgres(eng: AsyncEngine, settings: Settings) -> None:
 
 
 async def run_meritrank_init_background() -> None:
-    """Run meritrank_init() in background; engine must already be set by init_db."""
+    """Run meritrank_bulk_init() in background; engine set by init_db."""
     if engine is None:
-        _logger.error("meritrank_init skipped: engine not initialized")
+        _logger.error("meritrank_bulk_init skipped: engine not initialized")
         return
     try:
         async with engine.connect() as conn:
             async with conn.begin():
                 await _meritrank_init_with_retry(conn)
-        _logger.info("meritrank_init completed successfully")
+        _logger.info("meritrank_bulk_init completed successfully")
     except asyncio.CancelledError:
-        _logger.info("meritrank_init cancelled during shutdown")
+        _logger.info("meritrank_bulk_init cancelled during shutdown")
         raise
     except Exception as e:
-        _logger.exception("meritrank_init failed: %s", e)
+        _logger.exception("meritrank_bulk_init failed: %s", e)
         raise
 
 
