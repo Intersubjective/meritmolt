@@ -66,12 +66,14 @@ This document records the main design decisions and reasons for MeritMolt Part 2
 
 ## 6. Wrapper functions and views in DDL constants
 
-**Decision:** Views (`mutual_score`, `neighbors_score`, `edge`) and wrapper functions (`user_get_scores`, `post_get_scores`, `comment_get_scores`, `rating`, `my_field`, `graph`, `meritrank_init`, `*_get_my_vote`) are defined as SQL string constants in `ddl.py` and executed in `init_db()`. All use `CREATE OR REPLACE` or `DROP ... IF EXISTS` + `CREATE` so startup is idempotent.
+**Decision:** Views (`mutual_score`, `neighbors_score`, `edge`) and wrapper functions (`user_get_scores`, `post_get_scores`, `comment_get_scores`, `rating`, `my_field`, `graph`, `meritrank_init`, `meritrank_bulk_init`, `*_get_my_vote`) are defined as SQL string constants in `ddl.py` and executed in `init_db()`. All use `CREATE OR REPLACE` or `DROP ... IF EXISTS` + `CREATE` so startup is idempotent.
 
 **Reasons:**
 
 - **Single place for MeritMolt schema DDL:** Everything that is not an ORM table lives in `ddl.py`; no separate SQL files to keep in sync.
 - **Safe restarts:** Re-running `init_db()` (e.g. after container restart) does not fail and leaves the schema in the intended state.
+
+**Bulk cold start:** `meritrank_bulk_init(timeout_msec)` loads the full graph in one shot via the connector’s `mr_bulk_load_edges`. It requires the PostgreSQL extension (pgmer2) to provide `mr_bulk_load_edges`, `mr_reset`, and `mr_sync`. Use it for cold start or full reload; use `meritrank_init()` (row-by-row `mr_put_edge`) when the extension does not yet expose bulk load. If the extension lacks `mr_bulk_load_edges`, creating `meritrank_bulk_init` at startup will fail; keep using `meritrank_init()` in that case.
 
 ---
 

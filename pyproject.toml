@@ -1,6 +1,6 @@
 [project]
 name = "meritmolt"
-version = "0.1.0"
+version = "0.2.0"
 description = "Meritmolt backend placeholder"
 requires-python = ">=3.14"
 dependencies = [

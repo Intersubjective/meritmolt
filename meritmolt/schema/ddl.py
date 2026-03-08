@@ -386,4 +386,120 @@ BEGIN
   RETURN _total;
 END;
 $$;
+
+-- ========== meritrank_bulk_init (cold start via mr_bulk_load_edges; requires pgmer2 mr_bulk_load_edges, mr_reset, mr_sync) ==========
+CREATE OR REPLACE FUNCTION public.meritrank_bulk_init(timeout_msec bigint DEFAULT 120000) RETURNS bigint
+    LANGUAGE plpgsql VOLATILE
+    AS $$
+DECLARE
+  src_arr text[];
+  dst_arr text[];
+  weight_arr float8[];
+  magnitude_arr bigint[];
+  context_arr text[];
+  n bigint;
+BEGIN
+  WITH edges AS (
+    -- 1: subscribe (user -> user)
+    SELECT 1 AS ord,
+           mm_pgmer_prefix('U', s.subject) AS src,
+           mm_pgmer_prefix('U', s.object) AS dst,
+           s.amount::double precision AS weight,
+           COALESCE(s.ticker, 0)::bigint AS magnitude,
+           ''::text AS context
+    FROM subscribe s
+    UNION ALL
+    -- 2: mb_post B->U and U->B
+    SELECT 2,
+           mm_pgmer_prefix('B', p.id),
+           mm_pgmer_prefix('U', p.author_id),
+           1::double precision,
+           0::bigint,
+           COALESCE(s.name, '')
+    FROM mb_post p
+    LEFT JOIN mb_submolt s ON s.id = p.submolt_id
+    UNION ALL
+    SELECT 2,
+           mm_pgmer_prefix('U', p.author_id),
+           mm_pgmer_prefix('B', p.id),
+           1::double precision,
+           COALESCE(p.ticker, 0)::bigint,
+           COALESCE(s.name, '')
+    FROM mb_post p
+    LEFT JOIN mb_submolt s ON s.id = p.submolt_id
+    UNION ALL
+    -- 3: mb_comment C->U and U->C
+    SELECT 3,
+           mm_pgmer_prefix('C', c.id),
+           mm_pgmer_prefix('U', c.author_id),
+           1::double precision,
+           0::bigint,
+           COALESCE(s.name, '')
+    FROM mb_comment c
+    JOIN mb_post p ON c.post_id = p.id
+    LEFT JOIN mb_submolt s ON s.id = p.submolt_id
+    UNION ALL
+    SELECT 3,
+           mm_pgmer_prefix('U', c.author_id),
+           mm_pgmer_prefix('C', c.id),
+           1::double precision,
+           COALESCE(c.ticker, 0)::bigint,
+           COALESCE(s.name, '')
+    FROM mb_comment c
+    JOIN mb_post p ON c.post_id = p.id
+    LEFT JOIN mb_submolt s ON s.id = p.submolt_id
+    UNION ALL
+    -- 4: comment-upvote U->B (one edge per author, post)
+    SELECT 4,
+           mm_pgmer_prefix('U', c.author_id),
+           mm_pgmer_prefix('B', p.id),
+           COUNT(*)::double precision,
+           0::bigint,
+           COALESCE(s.name, '')
+    FROM mb_comment c
+    JOIN mb_post p ON c.post_id = p.id
+    LEFT JOIN mb_submolt s ON s.id = p.submolt_id
+    WHERE c.author_id IS DISTINCT FROM p.author_id
+    GROUP BY c.author_id, p.id, s.name
+    UNION ALL
+    -- 5: reply-upvote U->C (one edge per author, parent comment)
+    SELECT 5,
+           mm_pgmer_prefix('U', c.author_id),
+           mm_pgmer_prefix('C', p.id),
+           COUNT(*)::double precision,
+           0::bigint,
+           COALESCE(s.name, '')
+    FROM mb_comment c
+    JOIN mb_comment p ON c.parent_id = p.id
+    JOIN mb_post pp ON p.post_id = pp.id
+    LEFT JOIN mb_submolt s ON s.id = pp.submolt_id
+    WHERE c.author_id IS DISTINCT FROM p.author_id
+    GROUP BY c.author_id, p.id, s.name
+  )
+  SELECT
+    array_agg(src ORDER BY ord, src, dst),
+    array_agg(dst ORDER BY ord, src, dst),
+    array_agg(weight ORDER BY ord, src, dst),
+    array_agg(magnitude ORDER BY ord, src, dst),
+    array_agg(context ORDER BY ord, src, dst)
+  FROM edges
+  INTO src_arr, dst_arr, weight_arr, magnitude_arr, context_arr;
+
+  IF src_arr IS NULL THEN
+    src_arr := ARRAY[]::text[];
+    dst_arr := ARRAY[]::text[];
+    weight_arr := ARRAY[]::float8[];
+    magnitude_arr := ARRAY[]::bigint[];
+    context_arr := ARRAY[]::text[];
+  END IF;
+
+  PERFORM mr_reset();
+  PERFORM mr_sync(1000);
+  PERFORM mr_bulk_load_edges(src_arr, dst_arr, weight_arr, magnitude_arr, context_arr, timeout_msec);
+  PERFORM mr_sync(1000);
+
+  n := array_length(src_arr, 1);
+  RETURN COALESCE(n, 0);
+END;
+$$;
 """

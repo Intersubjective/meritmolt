@@ -6,7 +6,7 @@ Run after MeritMolt is up:
 Inserts:
 - mb_agent id='any-user' (required by ensure_agent_exists)
 - mb_post id='Bpost123' author_id='any-user' (required by ensure_post_exists)
-- meritrank_init() to sync graph
+- meritrank_init() to sync graph (or meritrank_bulk_init() when pgmer2 has it)
 """
 
 from __future__ import annotations
@@ -64,6 +64,8 @@ async def main() -> None:
         print(
             "Seeded integration test data (any-user, Bpost123) and ran meritrank_init()"
         )
+        # To use bulk cold start when the extension provides mr_bulk_load_edges:
+        # await conn.execute("SELECT meritrank_bulk_init()")
     finally:
         await conn.close()
 
